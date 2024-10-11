@@ -49,14 +49,17 @@ The endpoint accept a `multipart/form-data` request with the following fields:
 
 The `input` field should contain a document with one of the following MIME-types:
 
-- `text/html`: .html files;
-- `application/xhtml+xml`: .xml files;
-- `application/msword`: .doc and .dot files;
-- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`: .docx files;
-- `application/vnd.ms-excel`: .xls, .xlt and .xla files;
-- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`: .xlsx files;
-- `application/vnd.ms-powerpoint`: .ppt, .pot, .pps and .ppa files;
-- `application/vnd.openxmlformats-officedocument.presentationml.presentation`: .pptx files.
+- `text/html`: `.html` files;
+- `application/xhtml+xml`: `.xml` files;
+- `application/msword`: `.doc` and `.dot` files;
+- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`: `.docx` files;
+- `application/vnd.ms-excel`: `.xls`, `.xlt` and `.xla` files;
+- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`: `.xlsx` files;
+- `application/vnd.ms-powerpoint`: `.ppt`, `.pot`, `.pps` and `.ppa` files;
+- `application/vnd.openxmlformats-officedocument.presentationml.presentation`: `.pptx` files.
+- `application/vnd.oasis.opendocument.presentation`: `.odp` files.
+- `application/vnd.oasis.opendocument.spreadsheet`: `.ods` files.
+- `application/vnd.oasis.opendocument.text`: `.odt` files.
 
 The `resources` field can contain additional resources for conversion from `.html` and `.xml` that cannot be embedded in
 the file itself. For example, if the file contains an image tag referencing `dog.jpg`, it may be included as a resource

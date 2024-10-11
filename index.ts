@@ -613,6 +613,9 @@ async function convert(
     case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": // .xlsx
     case "application/vnd.ms-powerpoint": // .ppt, .pot, .pps, .ppa
     case "application/vnd.openxmlformats-officedocument.presentationml.presentation": // .pptx
+    case "application/vnd.oasis.opendocument.presentation": // .odp
+    case "application/vnd.oasis.opendocument.spreadsheet": // .ods
+    case "application/vnd.oasis.opendocument.text": // .odt
       return await convertDocument(input);
     default:
       // Unsupported media type
