@@ -179,6 +179,6 @@ For any questions or support, please open an issue on GitHub.
 
 For comparison, consider exploring these alternatives:
 
-- [https://github.com/gotenberg/gotenberg](Gotenberg)
-- [https://github.com/wkhtmltopdf/wkhtmltopdf](wkhtmltopdf)
-- [https://github.com/fritsvt/puppeteer-html-to-pdf-converter](puppeteer-html-to-pdf-converter)
+- [Gotenberg](https://github.com/gotenberg/gotenberg)
+- [wkhtmltopdf](https://github.com/wkhtmltopdf/wkhtmltopdf)
+- [puppeteer-html-to-pdf-converter](https://github.com/fritsvt/puppeteer-html-to-pdf-converter)
