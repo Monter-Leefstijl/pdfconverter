@@ -22,6 +22,7 @@ layout of the original documents.
 - **Health checks**: Provides a health check endpoint to monitor the service status.
 - **High-availability**: Ensures high-availability by automatically restarting child services (i.e. Chromium and LibreOffice) in case of failure.
 - **Highly configurable**: Allows customization of various settings through environment variables.
+- **Lightweight**: The entire source code is under 1000 LOC.
 
 ## Endpoints
 
