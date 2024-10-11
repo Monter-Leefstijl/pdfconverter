@@ -716,6 +716,9 @@ async function convertHtml(
  * - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
  * - application/vnd.ms-powerpoint
  * - application/vnd.openxmlformats-officedocument.presentationml.presentation
+ * - application/vnd.oasis.opendocument.presentation
+ * - application/vnd.oasis.opendocument.spreadsheet
+ * - application/vnd.oasis.opendocument.text
  *
  * @see https://www.libreoffice.org/
  */
