@@ -1,7 +1,8 @@
 # Monter PDF Converter
 
-Monter PDF Converter is a simple web service that converts various document formats to high-quality PDF files. It is 
-designed to handle multiple concurrent jobs, and ensures high-availability with health checks and automatic restarts.
+Monter PDF Converter is a simple, developer-friendly API for converting various document formats into high-quality PDF 
+files. It is designed to handle multiple concurrent jobs, and ensures high-availability with health checks and automatic
+restarts.
 
 ## Chromium and LibreOffice
 
