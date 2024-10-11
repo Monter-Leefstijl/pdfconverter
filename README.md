@@ -162,3 +162,23 @@ Below is a table of environment variables that can be used to configure the serv
 
 6.  The service is now running on port `8080` (to change the port, configure the port mapping in the
     `docker-compose.yaml` file).
+
+## Contributing
+
+Contributions are welcome! Please submit a pull request or open an issue to discuss any changes.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](https://github.com/Monter-Leefstijl/pdfconverter/blob/main/LICENSE) file for details.
+
+## Contact
+
+For any questions or support, please open an issue on GitHub.
+
+## Alternatives
+
+For comparison, consider exploring these alternatives:
+
+- [https://github.com/gotenberg/gotenberg](Gotenberg)
+- [https://github.com/wkhtmltopdf/wkhtmltopdf](wkhtmltopdf)
+- [https://github.com/fritsvt/puppeteer-html-to-pdf-converter](puppeteer-html-to-pdf-converter)
