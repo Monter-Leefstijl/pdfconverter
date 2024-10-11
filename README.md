@@ -179,6 +179,6 @@ For any questions or support, please open an issue on GitHub.
 
 For comparison, consider exploring these alternatives:
 
-- [Gotenberg](https://github.com/gotenberg/gotenberg)
-- [wkhtmltopdf](https://github.com/wkhtmltopdf/wkhtmltopdf)
-- [puppeteer-html-to-pdf-converter](https://github.com/fritsvt/puppeteer-html-to-pdf-converter)
+- [Gotenberg](https://github.com/gotenberg/gotenberg): Comphrensive API, but without support for concurrent jobs.
+- [wkhtmltopdf](https://github.com/wkhtmltopdf/wkhtmltopdf): Command-line tool to convert HTML to PDF using WebKit.
+- [puppeteer-html-to-pdf-converter](https://github.com/fritsvt/puppeteer-html-to-pdf-converter): Simple API for converting from HTML to PDF.
