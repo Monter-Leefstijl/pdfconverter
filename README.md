@@ -143,7 +143,7 @@ Below is a table of environment variables that can be used to configure the serv
     name: pdfconverter
     services:
       pdfconverter:
-        image: monter-leefstijl/pdfconverter:latest
+        image: monterleefstijl/pdfconverter:latest
         healthcheck:
           test: ["CMD", "curl", "--fail", "http://localhost:8080/healthcheck"]
           interval: 60s
