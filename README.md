@@ -45,12 +45,12 @@ curl --location 'http://localhost:8080' \
 The endpoint accept a `multipart/form-data` request with the following fields:
 
 - `input` (*required*): The document to convert.
-- `resources` (*optional*): Additional resources for conversion from `.html` and `.xml` to PDF.
+- `resources` (*optional*): Additional resources for conversion from `.html` and `.xhtml` to PDF.
 
 The `input` field should contain a document with one of the following MIME-types:
 
 - `text/html`: `.html` files;
-- `application/xhtml+xml`: `.xml` files;
+- `application/xhtml+xml`: `.xhtml` files;
 - `application/msword`: `.doc` and `.dot` files;
 - `application/vnd.openxmlformats-officedocument.wordprocessingml.document`: `.docx` files;
 - `application/vnd.ms-excel`: `.xls`, `.xlt` and `.xla` files;
@@ -61,7 +61,7 @@ The `input` field should contain a document with one of the following MIME-types
 - `application/vnd.oasis.opendocument.spreadsheet`: `.ods` files.
 - `application/vnd.oasis.opendocument.text`: `.odt` files.
 
-The `resources` field can contain additional resources for conversion from `.html` and `.xml` that cannot be embedded in
+The `resources` field can contain additional resources for conversion from `.html` and `.xhtml` that cannot be embedded in
 the file itself. For example, if the file contains an image tag referencing `dog.jpg`, it may be included as a resource
 to have it be displayed in the PDF.
 
@@ -183,6 +183,6 @@ For any questions or support, please open an issue on GitHub.
 
 For comparison, consider exploring these alternatives:
 
-- [Gotenberg](https://github.com/gotenberg/gotenberg): Comphrensive API, but without support for concurrent jobs.
+- [Gotenberg](https://github.com/gotenberg/gotenberg): More comphrensive API, but without native support for concurrent jobs.
 - [wkhtmltopdf](https://github.com/wkhtmltopdf/wkhtmltopdf): Command-line tool to convert HTML to PDF using WebKit.
 - [puppeteer-html-to-pdf-converter](https://github.com/fritsvt/puppeteer-html-to-pdf-converter): Simple API for converting from HTML to PDF.
