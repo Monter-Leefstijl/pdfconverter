@@ -617,6 +617,8 @@ async function convert(
     case "application/vnd.oasis.opendocument.spreadsheet": // .ods
     case "application/vnd.oasis.opendocument.text": // .odt
       return await convertDocument(input);
+    case "application/pdf": // .pdf
+      return convertPdf(input);
     default:
       // Unsupported media type
       throw new MediaTypeError(`Unsupported media type: ${input.mimetype}`);
@@ -733,6 +735,20 @@ async function convertDocument(input: Express.Multer.File): Promise<ConversionRe
   }
 
   throw new Error("No available unoserver instances");
+}
+
+/**
+ * "Converts" the given PDF to a PDF.
+ *
+ * This converter supports files with the following MIME types:
+ *
+ * - application/pdf
+ */
+function convertPdf(input: Express.Multer.File): ConversionResult {
+  return {
+    output: input.buffer,
+    mimeType: "application/pdf"
+  }
 }
 
 (async function () {
