@@ -60,6 +60,7 @@ The `input` field should contain a document with one of the following MIME-types
 - `application/vnd.oasis.opendocument.presentation`: `.odp` files.
 - `application/vnd.oasis.opendocument.spreadsheet`: `.ods` files.
 - `application/vnd.oasis.opendocument.text`: `.odt` files.
+- `application/pdf`: `.pdf` files.
 
 The `resources` field can contain additional resources for conversion from `.html` and `.xhtml` that cannot be embedded in
 the file itself. For example, if the file contains an image tag referencing `dog.jpg`, it may be included as a resource
