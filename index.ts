@@ -1,11 +1,13 @@
 import { queue, QueueObject } from "async";
-import {ChildProcess, ChildProcessWithoutNullStreams, spawn} from "child_process";
+import { ChildProcess, ChildProcessWithoutNullStreams, spawn, execSync } from "child_process";
 import crypto from "crypto";
 import express from "express";
 import morgan from "morgan";
 import multer, { MulterError } from "multer";
 import puppeteer, { Browser, PuppeteerError, TimeoutError as PuppeteerTimeoutError } from "puppeteer";
 import _ from "lodash";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 const settings = {
   // Port for the webserver
@@ -112,11 +114,15 @@ class UnoconvertTimeoutError extends Error {}
  */
 class Unoserver {
   private unoserverProcess?: ChildProcess;
+  private ppidFile: string;
+
   private available = false;
 
   constructor(
       private readonly port: number,
-  ) {}
+  ) {
+    this.ppidFile = `/tmp/libreoffice-unoserver-${this.port}.pid.txt`;
+  }
 
   isAvailable() {
     return this.available;
@@ -138,14 +144,29 @@ class Unoserver {
       this.available = true;
 
       this.unoserverProcess.on('exit', async () => {
+        console.log(
+            `[${new Date().toUTCString()}] Unoserver with port ${this.port} disconnected. Restarting after 5 seconds.`
+        );
+
         health.unoservers[this.port] = "unhealthy";
 
         // Mark the unoserver as unavailable while it is restarting
         this.available = false;
 
-        console.log(
-            `[${new Date().toUTCString()}] Unoserver with port ${this.port} disconnected unexpectedly. Restarting after 5 seconds.`
-        );
+        // Ensure associated LibreOffice process is killed
+        try {
+          const ppid = Number(fs.readFileSync(this.ppidFile));
+
+          console.log(
+              `[${new Date().toUTCString()}] Killing associated LibreOffice process with PPID ${ppid} for unoserver on port ${this.port}.`
+          )
+
+          execSync(`pkill -9 -P ${ppid}`)
+        } catch (e) {
+          console.log(
+              `[${new Date().toUTCString()}] Failed to kill associated LibreOffice process for unoserver on port ${this.port} because no PPID file exists.`
+          )
+        }
 
         await new Promise((resolve) => setTimeout(resolve, 5000));
         await this.start(true);
@@ -153,11 +174,11 @@ class Unoserver {
     } catch (e) {
       if (isRestart) {
         console.log(
-            `[${new Date().toUTCString()}] Failed to restart unoserver on port ${this.port}. Retrying after 5 seconds.`
+            `[${new Date().toUTCString()}] Failed to restart unoserver on port ${this.port} (${e}). Retrying after 5 seconds.`
         );
       } else {
         console.log(
-            `[${new Date().toUTCString()}] Failed to start unoserver on port ${this.port}. Retrying after 5 seconds.`
+            `[${new Date().toUTCString()}] Failed to start unoserver on port ${this.port} (${e}). Retrying after 5 seconds.`
         );
       }
 
@@ -179,6 +200,8 @@ class Unoserver {
 
         const timeoutHandler = setTimeout(() => {
           unoconvertProcess.kill('SIGKILL');
+          this.unoserverProcess?.kill('SIGKILL');
+
           reject(new UnoconvertTimeoutError('unoconvert process timed out'));
         }, Number(settings.pdfRenderTimeout));
 
@@ -213,7 +236,13 @@ class Unoserver {
     const args = [
       '--port', this.port.toString(),
       '--uno-port', unoPort.toString(),
+      '--libreoffice-pid-file', this.ppidFile,
     ];
+
+    // Remove the existing PID file, if it exists
+    try {
+      fs.unlinkSync(this.ppidFile);
+    } catch {}
 
     // Start the process with ignored pipes
     // @see https://ask.libreoffice.org/t/the-conversion-of-docx-files-to-pdf-gets-stuck-after-reaching-a-certain-amount/102627
@@ -227,7 +256,14 @@ class Unoserver {
       });
 
       process.on('spawn', () => {
-        resolve(process);
+        // Wait with resolving the Promise until the PID file is created
+        const watcher = fs.watch('/tmp')
+        watcher.on('change', (eventType, filename) => {
+          if (eventType === 'rename' && filename === path.basename(this.ppidFile)) {
+            watcher.close();
+            resolve(process);
+          }
+        });
       });
     });
   }
