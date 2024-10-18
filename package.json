@@ -1,15 +1,15 @@
 {
   "name": "pdfconverter",
-  "version": "1.0.0",
-  "main": "convert.js",
-  "license": "UNLICENSED",
+  "version": "0.1.1",
+  "main": "index.ts",
+  "license": "MIT",
   "scripts": {
     "start": "node index.js",
     "build": "tsc"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Monter-Leefstijl/monterecd.git"
+    "url": "git+https://github.com/Monter-Leefstijl/pdfconverter.git"
   },
   "dependencies": {
     "async": "^3.2.5",
