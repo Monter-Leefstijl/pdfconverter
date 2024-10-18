@@ -28,7 +28,7 @@ const settings = {
   // Max size of each uploaded file
   maxFileSize: process.env.MAX_FILE_SIZE ?? 128 * 1024 * 1024, // 128 MB
   // Max number of concurrent jobs
-  maxConcurrentJobs: process.env.MAX_CONCURRENT_JOBS ?? 12,
+  maxConcurrentJobs: process.env.MAX_CONCURRENT_JOBS ?? 6,
   // Max number of jobs in the queue
   maxQueuedJobs: process.env.MAX_QUEUED_JOBS ?? 128,
   // Max number of resources that can be uploaded
