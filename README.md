@@ -136,7 +136,8 @@ Below is a table of environment variables that can be used to configure the serv
 
 ## Installation
 
-> **Warning:** It is not recommended to expose an instance of Monter PDF Converter to the world directly.
+> [!IMPORTANT]
+> It is not recommended to expose Monter PDF Converter to the world directly, unless you take proper precautions (such as sandboxing or using a separate server).
 
 1.  Follow [this guide](https://docs.docker.com/engine/install/) to install Docker on your machine.
 2.  Follow [this guide](https://docs.docker.com/compose/install/) to install Docker Compose on your machine.
