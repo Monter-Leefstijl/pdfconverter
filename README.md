@@ -136,6 +136,8 @@ Below is a table of environment variables that can be used to configure the serv
 
 ## Installation
 
+> **Warning:** It is not recommended to expose an instance of Monter PDF Converter to the world directly.
+
 1.  Follow [this guide](https://docs.docker.com/engine/install/) to install Docker on your machine.
 2.  Follow [this guide](https://docs.docker.com/compose/install/) to install Docker Compose on your machine.
 3.  Create a `docker-compose.yaml` file with the following content:
