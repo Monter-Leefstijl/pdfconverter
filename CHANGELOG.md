@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Images are now only build and pushed to Docker Hub when a new tag is created.
+- Images are now only built and pushed to Docker Hub when a new tag is created.
 - Bump `express` dependency from `^4.19.2` to `^4.21.1`.
 
 ## [0.1.2] - 2024-10-18
