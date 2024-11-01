@@ -7,7 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## UNRELEASED
+## [unreleased]
+
+## [0.1.3] - 2024-11-01
 
 ### Added
 
@@ -45,7 +47,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Add the endpoint for converting documents to PDF.
 - Add the endpoint to retrieve the health of an instance.
 
-[unreleased]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.2...HEAD
+[unreleased]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.3...HEAD
+[0.1.3]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.2...0.1.3
 [0.1.2]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.1...0.1.2
 [0.1.1]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/Monter-Leefstijl/pdfconverter/releases/tag/0.1.0
