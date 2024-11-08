@@ -1,5 +1,7 @@
 # Monter PDF Converter
 
+[![Docker pulls](https://img.shields.io/docker/pulls/monterleefstijl/pdfconverter?style=flat&logo=docker&logoColor=white)](https://hub.docker.com/r/monterleefstijl/pdfconverter)
+
 Monter PDF Converter is a simple, developer-friendly API for converting various document formats into high-quality PDF 
 files. It is designed to handle multiple *concurrent* jobs, and ensures high-availability with health checks and automatic
 restarts.
