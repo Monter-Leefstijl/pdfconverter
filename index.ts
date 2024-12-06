@@ -1,10 +1,19 @@
 import { queue, QueueObject } from "async";
-import { ChildProcess, ChildProcessWithoutNullStreams, spawn, execSync } from "child_process";
+import {
+  ChildProcess,
+  ChildProcessWithoutNullStreams,
+  spawn,
+  execSync,
+} from "child_process";
 import crypto from "crypto";
 import express from "express";
 import morgan from "morgan";
 import multer, { MulterError } from "multer";
-import puppeteer, { Browser, PuppeteerError, TimeoutError as PuppeteerTimeoutError } from "puppeteer";
+import puppeteer, {
+  Browser,
+  PuppeteerError,
+  TimeoutError as PuppeteerTimeoutError,
+} from "puppeteer";
 import _ from "lodash";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -14,17 +23,23 @@ const settings = {
   webserverPort: process.env.WEBSERVER_PORT ?? 8080,
   // Path to the Chrome executable
   chromeExecutablePath:
-    process.env.CHROME_EXECUTABLE_PATH ?? "/usr/bin/chromium-browser",
+      process.env.CHROME_EXECUTABLE_PATH ?? "/usr/bin/chromium-browser",
+  // Path to the LibreOffice executable
+  libreofficeExecutablePath:
+      process.env.LIBREOFFICE_EXECUTABLE_PATH ?? "/usr/bin/libreoffice",
   // Path to the unoserver executable
   unoserverExecutablePath:
-    process.env.UNOSERVER_EXECUTABLE_PATH ?? "/usr/bin/unoserver",
+      process.env.UNOSERVER_EXECUTABLE_PATH ?? "/usr/bin/unoserver",
   // Path to the unoconvert executable
   unoconvertExecutablePath:
-    process.env.UNOCONVERT_EXECUTABLE_PATH ?? "/usr/bin/unoconvert",
+      process.env.UNOCONVERT_EXECUTABLE_PATH ?? "/usr/bin/unoconvert",
+  // Max time to wait for unoserver to launch
+  unoserverLaunchTimeout: process.env.UNOSERVER_LAUNCH_TIMEOUT ?? 30 * 1000, // 30 seconds,
   // Max time to wait for the browser to launch
   chromeLaunchTimeout: process.env.CHROME_LAUNCH_TIMEOUT ?? 30 * 1000, // 30 seconds
   // Interval to restart the browser
-  chromeRestartInterval: process.env.CHROME_RESTART_INTERVAL ?? 24 * 60 * 60 * 1000, // 1 day
+  chromeRestartInterval:
+      process.env.CHROME_RESTART_INTERVAL ?? 24 * 60 * 60 * 1000, // 1 day
   // Max time to spend rendering a PDF
   pdfRenderTimeout: process.env.PDF_RENDER_TIMEOUT ?? 2.5 * 60 * 1000, // 2.5 minutes
   // Max size of each uploaded file
@@ -60,8 +75,8 @@ class RefCounted<T> {
   private collected = false;
 
   constructor(
-    private readonly value: T,
-    private readonly collect: (value: T) => void
+      private readonly value: T,
+      private readonly collect: (value: T) => void,
   ) {}
 
   get(): T {
@@ -115,13 +130,15 @@ class UnoconvertTimeoutError extends Error {}
 class Unoserver {
   private unoserverProcess?: ChildProcess;
   private ppidFile: string;
+  private userInstallationDir: string;
 
   private available = false;
 
-  constructor(
-      private readonly port: number,
-  ) {
+  constructor(private readonly port: number) {
+    const randomID = crypto.randomBytes(20).toString("hex");
+
     this.ppidFile = `/tmp/libreoffice-unoserver-${this.port}.pid.txt`;
+    this.userInstallationDir = `/tmp/libreoffice-unoserver-${this.port}-${randomID}`;
   }
 
   isAvailable() {
@@ -130,22 +147,26 @@ class Unoserver {
 
   async start(isRestart: boolean = false): Promise<void> {
     if (isRestart) {
-      console.log(`[${new Date().toUTCString()}] Restarting unoserver instance on port ${this.port}.`);
+      console.log(
+          `[${new Date().toUTCString()}] Restarting unoserver instance on port ${this.port}.`,
+      );
     }
 
     try {
       this.unoserverProcess = await this.spawnUnoserverProcess();
 
       if (isRestart) {
-        console.log(`[${new Date().toUTCString()}] Unoserver instance on port ${this.port} restarted.`);
+        console.log(
+            `[${new Date().toUTCString()}] Unoserver instance on port ${this.port} restarted.`,
+        );
       }
 
       health.unoservers[this.port] = "healthy";
       this.available = true;
 
-      this.unoserverProcess.on('exit', async () => {
+      this.unoserverProcess.on("exit", async () => {
         console.log(
-            `[${new Date().toUTCString()}] Unoserver with port ${this.port} disconnected. Restarting after 5 seconds.`
+            `[${new Date().toUTCString()}] Unoserver with port ${this.port} disconnected. Restarting after 5 seconds.`,
         );
 
         health.unoservers[this.port] = "unhealthy";
@@ -158,14 +179,27 @@ class Unoserver {
           const ppid = Number(fs.readFileSync(this.ppidFile));
 
           console.log(
-              `[${new Date().toUTCString()}] Killing associated LibreOffice process with PPID ${ppid} for unoserver on port ${this.port}.`
-          )
+              `[${new Date().toUTCString()}] Killing associated LibreOffice process with PPID ${ppid} for unoserver on port ${this.port}.`,
+          );
 
-          execSync(`pkill -9 -P ${ppid}`)
-        } catch (e) {
+          execSync(`pkill -9 -P ${ppid}`);
+        } catch (error) {
           console.log(
-              `[${new Date().toUTCString()}] Failed to kill associated LibreOffice process for unoserver on port ${this.port} because no PPID file exists.`
-          )
+              `[${new Date().toUTCString()}] Failed to kill associated LibreOffice process for unoserver on port ${this.port} (${error}).`,
+          );
+        }
+
+        // Ensure the user installation directory is removed
+        try {
+          console.log(
+              `[${new Date().toUTCString()}] Removing user installation directory for unoserver on port ${this.port}.`,
+          );
+
+          fs.rmSync(this.userInstallationDir, { recursive: true });
+        } catch (error) {
+          console.log(
+              `[${new Date().toUTCString()}] Failed to remove user installation directory for unoserver on port ${this.port} (${error}).`,
+          );
         }
 
         await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -174,11 +208,11 @@ class Unoserver {
     } catch (e) {
       if (isRestart) {
         console.log(
-            `[${new Date().toUTCString()}] Failed to restart unoserver on port ${this.port} (${e}). Retrying after 5 seconds.`
+            `[${new Date().toUTCString()}] Failed to restart unoserver on port ${this.port} (${e}). Retrying after 5 seconds.`,
         );
       } else {
         console.log(
-            `[${new Date().toUTCString()}] Failed to start unoserver on port ${this.port} (${e}). Retrying after 5 seconds.`
+            `[${new Date().toUTCString()}] Failed to start unoserver on port ${this.port} (${e}). Retrying after 5 seconds.`,
         );
       }
 
@@ -195,29 +229,39 @@ class Unoserver {
       const unoconvertProcess = await this.spawnUnoconvertProcess();
 
       return await new Promise((resolve, reject) => {
-        let outData = Buffer.alloc(128, '');
-        let errData = Buffer.alloc(128, '');
+        let outData = Buffer.alloc(128, "");
+        let errData = Buffer.alloc(128, "");
 
         const timeoutHandler = setTimeout(() => {
-          unoconvertProcess.kill('SIGKILL');
-          this.unoserverProcess?.kill('SIGKILL');
+          unoconvertProcess.kill("SIGKILL");
+          this.unoserverProcess?.kill("SIGKILL");
 
-          reject(new UnoconvertTimeoutError('unoconvert process timed out'));
+          reject(new UnoconvertTimeoutError("unoconvert process timed out"));
         }, Number(settings.pdfRenderTimeout));
 
-        unoconvertProcess.on('close', (code) => {
+        unoconvertProcess.on("close", (code) => {
           clearTimeout(timeoutHandler);
 
           if (code === 0) {
             resolve(outData);
           } else {
-            reject(new UnoconvertError(`unoconvert process exited with code ${code}: ${errData.toString()}`));
+            reject(
+                new UnoconvertError(
+                    `unoconvert process exited with code ${code}: ${errData.toString()}`,
+                ),
+            );
           }
         });
 
         // Read the output and error pipes 'outData' and 'errData'
-        unoconvertProcess.stdout.on('data', (data) => outData = Buffer.concat([outData, data]));
-        unoconvertProcess.stderr.on('data', (data) => errData = Buffer.concat([errData, data]));
+        unoconvertProcess.stdout.on(
+            "data",
+            (data) => (outData = Buffer.concat([outData, data])),
+        );
+        unoconvertProcess.stderr.on(
+            "data",
+            (data) => (errData = Buffer.concat([errData, data])),
+        );
 
         // Write the input to the input pipe
         unoconvertProcess.stdin.write(input);
@@ -232,11 +276,21 @@ class Unoserver {
   }
 
   private async spawnUnoserverProcess(): Promise<ChildProcess> {
+    const renderTimeout = Math.floor(Number(settings.pdfRenderTimeout) / 1000);
     const unoPort = this.port + 255;
     const args = [
-      '--port', this.port.toString(),
-      '--uno-port', unoPort.toString(),
-      '--libreoffice-pid-file', this.ppidFile,
+      "--port",
+      this.port.toString(),
+      "--uno-port",
+      unoPort.toString(),
+      "--executable",
+      settings.libreofficeExecutablePath,
+      "--libreoffice-pid-file",
+      this.ppidFile,
+      "--user-installation",
+      this.userInstallationDir,
+      "--conversion-timeout",
+      renderTimeout.toString(),
     ];
 
     // Remove the existing PID file, if it exists
@@ -244,48 +298,88 @@ class Unoserver {
       fs.unlinkSync(this.ppidFile);
     } catch {}
 
-    // Start the process with ignored pipes
-    // @see https://ask.libreoffice.org/t/the-conversion-of-docx-files-to-pdf-gets-stuck-after-reaching-a-certain-amount/102627
-    const process = spawn(settings.unoserverExecutablePath, args, {
-      stdio: 'ignore',
+    const watcherPromise = new Promise<void>((resolve, reject) => {
+      const watcher = fs.watch("/tmp");
+
+      let pidFileCreated = false;
+      let temporaryDirectoryCreated = false;
+
+      const timeoutHandler = setTimeout(() => {
+        watcher.close();
+        reject(
+            new Error(
+                "Timeout while waiting for PID file and temporary directory to be created",
+            ),
+        );
+      }, Number(settings.unoserverLaunchTimeout));
+
+      watcher.on("change", (eventType, filename) => {
+        if (
+            eventType === "rename" &&
+            filename === path.basename(this.ppidFile)
+        ) {
+          pidFileCreated = true;
+        }
+
+        if (
+            eventType === "rename" &&
+            filename === path.basename(this.userInstallationDir)
+        ) {
+          temporaryDirectoryCreated = true;
+        }
+
+        if (pidFileCreated && temporaryDirectoryCreated) {
+          watcher.close();
+          clearTimeout(timeoutHandler);
+          resolve();
+        }
+      });
     });
 
     return new Promise((resolve, reject) => {
-      process.on('error', async () => {
-        reject(new Error(`Failed to spawn unoserver process on port ${this.port}`));
+      // Start the process with ignored pipes
+      // @see https://ask.libreoffice.org/t/the-conversion-of-docx-files-to-pdf-gets-stuck-after-reaching-a-certain-amount/102627
+      const process = spawn(settings.unoserverExecutablePath, args, {
+        stdio: "ignore",
       });
 
-      process.on('spawn', () => {
-        // Wait with resolving the Promise until the PID file is created
-        const watcher = fs.watch('/tmp')
-        watcher.on('change', (eventType, filename) => {
-          if (eventType === 'rename' && filename === path.basename(this.ppidFile)) {
-            watcher.close();
-            resolve(process);
-          }
-        });
+      process.on("error", () => {
+        reject(
+            new Error(`Failed to spawn unoserver process on port ${this.port}`),
+        );
+      });
+
+      process.on("spawn", async () => {
+        try {
+          await watcherPromise;
+          resolve(process);
+        } catch (e) {
+          reject(e);
+        }
       });
     });
   }
 
   private async spawnUnoconvertProcess(): Promise<ChildProcessWithoutNullStreams> {
     const args = [
-      '--port', this.port.toString(),
-      '--convert-to', 'pdf',
-      '-', // Input from stdin
-      '-', // Output to stdout
+      "--port",
+      this.port.toString(),
+      "--convert-to",
+      "pdf",
+      "-", // Input from stdin
+      "-", // Output to stdout
     ];
 
     const process = spawn(settings.unoconvertExecutablePath, args, {
-      stdio: 'pipe',
+      stdio: "pipe",
     });
 
     return new Promise((resolve, reject) => {
-      process.on('error', async () => {
+      process.on("error", async () => {
         reject(new UnoconvertError(`Failed to spawn unoconvert process`));
       });
 
-      process.on('spawn', () => {
+      process.on("spawn", () => {
         resolve(process);
       });
     });
@@ -301,10 +395,13 @@ let jobQueue: QueueObject<ConversionJob>;
 
 const health: Health = {
   browser: "unhealthy",
-  unoservers: unoserverPorts.reduce((acc: Record<number, "healthy" | "unhealthy">, port: number) => {
-    acc[port] = "unhealthy";
-    return acc;
-  }, {}),
+  unoservers: unoserverPorts.reduce(
+      (acc: Record<number, "healthy" | "unhealthy">, port: number) => {
+        acc[port] = "unhealthy";
+        return acc;
+      },
+      {},
+  ),
   webserver: "unhealthy",
   jobQueue: "unhealthy",
 };
@@ -329,15 +426,17 @@ async function main() {
   });
 
   webserverInstance.get("/healthcheck", (req, res) => {
-    const statusCode = Object.values(health).every(
-      (status) => {
-        if (typeof status === "string") {
-          return status === "healthy";
-        } else {
-          return Object.values(status).every((subStatus) => subStatus === "healthy");
-        }
+    const statusCode = Object.values(health).every((status) => {
+      if (typeof status === "string") {
+        return status === "healthy";
+      } else {
+        return Object.values(status).every(
+            (subStatus) => subStatus === "healthy",
+        );
       }
-    ) ? 200 : 503;
+    })
+        ? 200
+        : 503;
 
     res.status(statusCode).json({ health }).send();
   });
@@ -347,48 +446,48 @@ async function main() {
 
   webserverInstance.options("/", (req, res) => {
     res
-      .setHeader("Accept", "multipart/form-data")
-      .setHeader("Allow", "POST")
-      .status(204)
-      .send();
+        .setHeader("Accept", "multipart/form-data")
+        .setHeader("Allow", "POST")
+        .status(204)
+        .send();
   });
 
   try {
     webserverInstance.post(
-      "/",
-      (req, res, next) => {
-        uploadHandler(req, res, (error) => {
-          if (error instanceof MulterError) {
-            console.log(
-              `[${new Date().toUTCString()}] Multer error while uploading (${error}).`
-            );
+        "/",
+        (req, res, next) => {
+          uploadHandler(req, res, (error) => {
+            if (error instanceof MulterError) {
+              console.log(
+                  `[${new Date().toUTCString()}] Multer error while uploading (${error}).`,
+              );
 
-            // Bad request
-            res.status(400).send();
-          } else if (error) {
-            console.log(
-              `[${new Date().toUTCString()}] Unknown error while uploading (${error}).`
-            );
+              // Bad request
+              res.status(400).send();
+            } else if (error) {
+              console.log(
+                  `[${new Date().toUTCString()}] Unknown error while uploading (${error}).`,
+              );
 
-            // Internal server error
-            res.status(500).send();
-          } else {
-            next();
+              // Internal server error
+              res.status(500).send();
+            } else {
+              next();
+            }
+          });
+        },
+        (req, res) => {
+          const conversionJob = createConversionJob(req, res);
+
+          try {
+            pushConversionJob(conversionJob);
+          } catch (error) {
+            console.log(`[${new Date().toUTCString()}] Job queue full.`);
+
+            // Service unavailable
+            res.status(503).send();
           }
-        });
-      },
-      (req, res) => {
-        const conversionJob = createConversionJob(req, res);
-
-        try {
-          pushConversionJob(conversionJob);
-        } catch (error) {
-          console.log(`[${new Date().toUTCString()}] Job queue full.`);
-
-          // Service unavailable
-          res.status(503).send();
-        }
-      }
+        },
     );
   } catch (error) {
     console.log(`[${new Date().toUTCString()}] Unknown exception (${error}).`);
@@ -414,10 +513,10 @@ function createConversionJob(req: express.Request, res: express.Response) {
     const resources = (req.files?.resources ?? []) as Express.Multer.File[];
 
     if (
-      !Array.isArray(input) ||
-      input.length !== 1 ||
-      !Array.isArray(resources) ||
-      resources.length > Number(settings.maxResourceCount)
+        !Array.isArray(input) ||
+        input.length !== 1 ||
+        !Array.isArray(resources) ||
+        resources.length > Number(settings.maxResourceCount)
     ) {
       // Bad request
       res.status(400).send();
@@ -433,13 +532,19 @@ function createConversionJob(req: express.Request, res: express.Response) {
       res.setHeader("Content-Type", mimeType).status(200).send(output);
     } catch (error) {
       console.log(
-        `[${new Date().toUTCString()}] Failed to generate PDF (${error}).`
+          `[${new Date().toUTCString()}] Failed to generate PDF (${error}).`,
       );
 
-      if (error instanceof PuppeteerTimeoutError || error instanceof UnoconvertTimeoutError) {
+      if (
+          error instanceof PuppeteerTimeoutError ||
+          error instanceof UnoconvertTimeoutError
+      ) {
         // Gateway timeout
         res.status(504).send();
-      } else if (error instanceof PuppeteerError || error instanceof UnoconvertError) {
+      } else if (
+          error instanceof PuppeteerError ||
+          error instanceof UnoconvertError
+      ) {
         // Bad gateway
         res.status(502).send();
       } else if (error instanceof MediaTypeError) {
@@ -461,26 +566,26 @@ function createConversionJob(req: express.Request, res: express.Response) {
  */
 async function initWebserver() {
   console.log(
-    `[${new Date().toUTCString()}] Starting webserver on port ${
-      settings.webserverPort
-    }.`
+      `[${new Date().toUTCString()}] Starting webserver on port ${
+          settings.webserverPort
+      }.`,
   );
 
   try {
     webserverInstance = express();
 
     webserverInstance.use(
-      morgan(
-        "[:date[web]] :method :url :status :res[content-length] - :response-time ms"
-      )
+        morgan(
+            "[:date[web]] :method :url :status :res[content-length] - :response-time ms",
+        ),
     );
 
     const server = webserverInstance.listen(settings.webserverPort, () => {
       health.webserver = "healthy";
       console.log(
-        `[${new Date().toUTCString()}] Webserver is listening on port ${
-          settings.webserverPort
-        }.`
+          `[${new Date().toUTCString()}] Webserver is listening on port ${
+              settings.webserverPort
+          }.`,
       );
     });
 
@@ -489,7 +594,7 @@ async function initWebserver() {
     server.setTimeout(Number(settings.pdfRenderTimeout) + 5 * 1000);
   } catch (error) {
     console.log(
-      `[${new Date().toUTCString()}] Failed to start webserver (${error}). Retrying after 5 seconds.`
+        `[${new Date().toUTCString()}] Failed to start webserver (${error}). Retrying after 5 seconds.`,
     );
 
     await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -524,27 +629,30 @@ async function startBrowser(isRestart: boolean = false) {
   try {
     // Launch the browser
     const newBrowserInstance = new RefCounted(
-      await puppeteer.launch({
-        timeout: Number(settings.chromeLaunchTimeout),
-        headless: true,
-        executablePath: settings.chromeExecutablePath,
-        args: [
-          "--disable-features=site-per-process",
-          "--disable-translate",
-          "--no-experiments",
-          "--disable-breakpad",
-          "--disable-extensions",
-          "--disable-plugins",
-          "--disable-infobars",
-          "--disable-gpu",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-session-crashed-bubble",
-          "--disable-accelerated-2d-canvas",
-          "--noerrdialogs",
-        ],
-      }),
-      (browser) => browser.close()
+        await puppeteer.launch({
+          timeout: Number(settings.chromeLaunchTimeout),
+          headless: true,
+          executablePath: settings.chromeExecutablePath,
+          args: [
+            "--disable-features=site-per-process",
+            "--disable-translate",
+            "--no-experiments",
+            "--disable-breakpad",
+            "--disable-extensions",
+            "--disable-plugins",
+            "--disable-infobars",
+            "--disable-gpu",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-session-crashed-bubble",
+            "--disable-accelerated-2d-canvas",
+            "--noerrdialogs",
+          ],
+        }),
+        (browser) => {
+          browser.close();
+          cleanupBrowserData(browser);
+        },
     );
 
     health.browser = "healthy";
@@ -562,9 +670,15 @@ async function startBrowser(isRestart: boolean = false) {
           return;
         }
 
+        try {
+          cleanupBrowserData(newBrowserInstance.get());
+        } finally {
+          newBrowserInstance.release();
+        }
+
         health.browser = "unhealthy";
         console.log(
-          `[${new Date().toUTCString()}] Headless browser disconnected unexpectedly. Restarting after 5 seconds.`
+            `[${new Date().toUTCString()}] Headless browser disconnected unexpectedly. Restarting after 5 seconds.`,
         );
 
         await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -584,16 +698,51 @@ async function startBrowser(isRestart: boolean = false) {
   } catch (error) {
     if (isRestart) {
       console.log(
-          `[${new Date().toUTCString()}] Failed to restart headless browser (${error}). Retrying after 5 seconds.`
+          `[${new Date().toUTCString()}] Failed to restart headless browser (${error}). Retrying after 5 seconds.`,
       );
     } else {
       console.log(
-          `[${new Date().toUTCString()}] Failed to start headless browser (${error}). Retrying after 5 seconds.`
+          `[${new Date().toUTCString()}] Failed to start headless browser (${error}). Retrying after 5 seconds.`,
       );
     }
 
     await new Promise((resolve) => setTimeout(resolve, 5000));
     await startBrowser(isRestart);
+  }
+}
+
+/**
+ * Cleans up temporary browser data of the given browser.
+ *
+ * @param browser
+ */
+function cleanupBrowserData(browser: Browser) {
+  const spawnArgs = browser.process()?.spawnargs;
+  if (!spawnArgs) {
+    return;
+  }
+
+  for (const spawnArg of spawnArgs) {
+    if (spawnArg.indexOf("--user-data-dir=") === 0) {
+      const chromeTmpDataDir = spawnArg.replace("--user-data-dir=", "");
+      try {
+        console.log(
+            `[${new Date().toUTCString()}] Removing temporary browser data directory.`,
+        );
+
+        if (
+            fs.existsSync(chromeTmpDataDir) &&
+            fs.lstatSync(chromeTmpDataDir).isDirectory() &&
+            chromeTmpDataDir.startsWith("/tmp/")
+        ) {
+          fs.rmSync(chromeTmpDataDir, { recursive: true });
+        }
+      } catch (e) {
+        console.log(
+            `[${new Date().toUTCString()}] Failed to remove temporary browser data directory.`,
+        );
+      }
+    }
   }
 }
 
@@ -620,7 +769,9 @@ async function initJobQueue() {
  * @see https://github.com/unoconv/unoserver
  */
 async function initUnoservers() {
-  console.log(`[${new Date().toUTCString()}] Starting ${settings.maxConcurrentJobs} unoserver instances.`);
+  console.log(
+      `[${new Date().toUTCString()}] Starting ${settings.maxConcurrentJobs} unoserver instances (this can take a while).`,
+  );
 
   for (const port of unoserverPorts) {
     const unoserverInstance = new Unoserver(port);
@@ -629,15 +780,17 @@ async function initUnoservers() {
     unoserverInstances.push(unoserverInstance);
   }
 
-  console.log(`[${new Date().toUTCString()}] ${settings.maxConcurrentJobs} unoserver instances started.`);
+  console.log(
+      `[${new Date().toUTCString()}] ${settings.maxConcurrentJobs} unoserver instances started.`,
+  );
 }
 
 /**
  * Converts the given input file and resources to a PDF.
  */
 async function convert(
-  input: Express.Multer.File,
-  resources: Express.Multer.File[]
+    input: Express.Multer.File,
+    resources: Express.Multer.File[],
 ): Promise<ConversionResult> {
   switch (input.mimetype) {
     case "text/html":
@@ -672,9 +825,9 @@ async function convert(
  * @see https://pptr.dev/
  */
 async function convertHtml(
-  input: Express.Multer.File,
-  resources: Express.Multer.File[],
-  browserInstance: RefCounted<Browser>
+    input: Express.Multer.File,
+    resources: Express.Multer.File[],
+    browserInstance: RefCounted<Browser>,
 ): Promise<ConversionResult> {
   const browser = browserInstance.get();
 
@@ -760,12 +913,14 @@ async function convertHtml(
  *
  * @see https://www.libreoffice.org/
  */
-async function convertDocument(input: Express.Multer.File): Promise<ConversionResult> {
+async function convertDocument(
+    input: Express.Multer.File,
+): Promise<ConversionResult> {
   for (const unoserverInstance of unoserverInstances) {
     if (unoserverInstance.isAvailable()) {
       return {
         output: await unoserverInstance.convert(input.buffer),
-        mimeType: "application/pdf"
+        mimeType: "application/pdf",
       };
     }
   }
@@ -783,8 +938,8 @@ async function convertDocument(input: Express.Multer.File): Promise<ConversionRe
 function convertPdf(input: Express.Multer.File): ConversionResult {
   return {
     output: input.buffer,
-    mimeType: "application/pdf"
-  }
+    mimeType: "application/pdf",
+  };
 }
 
 (async function () {
