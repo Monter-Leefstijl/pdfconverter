@@ -165,6 +165,8 @@ Below is a table of environment variables that can be used to configure the serv
         # Required for rootless Docker
         cap_add:
           - SYS_ADMIN
+        tmpfs:
+          - /tmp
         restart: always
     ```
 
