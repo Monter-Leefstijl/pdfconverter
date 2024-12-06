@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+### Fixed
+
+- Fix issue where the cache would not always be cleared correctly, causing the disk to eventually fill up.
+
 ## [0.1.3] - 2024-11-01
 
 ### Added

@@ -6,6 +6,8 @@ Monter PDF Converter is a simple, developer-friendly API for converting various 
 files. It is designed to handle multiple *concurrent* jobs, and ensures high-availability with health checks and automatic
 restarts.
 
+It is used in production by [Monter Leefstijl](https://www.monterleefstijl.nl/).
+
 ## Chromium and LibreOffice
 
 Monter PDF Converter uses **Chromium** and **LibreOffice** to convert to PDFs to faithfully reproduce the formatting and
@@ -122,19 +124,21 @@ The endpoint accepts a `GET` request with no parameters.
 
 Below is a table of environment variables that can be used to configure the service.
 
-| Name                         | Description                                                                                          | Default value               |
-|------------------------------|------------------------------------------------------------------------------------------------------|-----------------------------|
-| `WEBSERVER_PORT`             | The port the web server listens on.                                                                  | `8080`                      |
-| `CHROME_EXECUTABLE_PATH`     | The path to the Chrome executable.                                                                   | `/usr/bin/chromium-browser` |
-| `UNOSERVER_EXECUTABLE_PATH`  | The path to the Unoserver executable.                                                                | `/usr/bin/unoserver`        |
-| `UNOCONVERT_EXECUTABLE_PATH` | The path to the Unoconvert executable.                                                               | `/usr/bin/unoconvert`       |
-| `CHROME_LAUNCH_TIMEOUT`      | The maximum time to wait in milliseconds for Chrome to launch.                                       | `30000` (30 seconds)        |
-| `CHROME_RESTART_INTERVAL`    | The interval in milliseconds to restart the browser.                                                 | `86400000` (1 day)          |
-| `PDF_RENDER_TIMEOUT`         | The maximum time to spend rendering a single PDF.                                                    | `150000` (2.5 minutes)      |
-| `MAX_FILE_SIZE`              | The maximum size in bytes for each uploaded file.                                                    | `134217728` (128 MB)        |
-| `MAX_CONCURRENT_JOBS`        | The maximum number of concurrent jobs. Settings this to a high value may cause unexpected behaviour. | `6`                         | 
-| `MAX_QUEUED_JOBS`            | The maximum number of jobs in the queue.                                                             | `128`                       |
-| `MAX_RESOURCE_COUNT`         | The maximum number of resources (e.g. images) that can be uploaded.                                  | `16`                        |
+| Name                          | Description                                                                                          | Default value               |
+|-------------------------------|------------------------------------------------------------------------------------------------------|-----------------------------|
+| `WEBSERVER_PORT`              | The port the web server listens on.                                                                  | `8080`                      |
+| `CHROME_EXECUTABLE_PATH`      | The path to the Chrome executable.                                                                   | `/usr/bin/chromium-browser` |
+| `LIBREOFFICE_EXECUTABLE_PATH` | The path to the LibreOffice executable.                                                              | `/usr/bin/libreoffice`      |
+| `UNOSERVER_EXECUTABLE_PATH`   | The path to the Unoserver executable.                                                                | `/usr/bin/unoserver`        |
+| `UNOCONVERT_EXECUTABLE_PATH`  | The path to the Unoconvert executable.                                                               | `/usr/bin/unoconvert`       |
+| `UNOSERVER_LAUNCH_TIMEOUT`    | The maximum time to wait in milliseconds for unoserver to launch.                                    | `30000` (30 seconds)        |
+| `CHROME_LAUNCH_TIMEOUT`       | The maximum time to wait in milliseconds for Chrome to launch.                                       | `30000` (30 seconds)        |
+| `CHROME_RESTART_INTERVAL`     | The interval in milliseconds to restart the browser.                                                 | `86400000` (1 day)          |
+| `PDF_RENDER_TIMEOUT`          | The maximum time to spend rendering a single PDF.                                                    | `150000` (2.5 minutes)      |
+| `MAX_FILE_SIZE`               | The maximum size in bytes for each uploaded file.                                                    | `134217728` (128 MB)        |
+| `MAX_CONCURRENT_JOBS`         | The maximum number of concurrent jobs. Settings this to a high value may cause unexpected behaviour. | `6`                         | 
+| `MAX_QUEUED_JOBS`             | The maximum number of jobs in the queue.                                                             | `128`                       |
+| `MAX_RESOURCE_COUNT`          | The maximum number of resources (e.g. images) that can be uploaded.                                  | `16`                        |
 
 ## Installation
 
