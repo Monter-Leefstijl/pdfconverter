@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+## [0.1.4] - 2024-12-06
+
 ### Fixed
 
 - Fix issue where the cache would not always be cleared correctly, causing the disk to eventually fill up.
@@ -51,7 +53,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Add the endpoint for converting documents to PDF.
 - Add the endpoint to retrieve the health of an instance.
 
-[unreleased]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.3...HEAD
+[unreleased]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.4...HEAD
+[0.1.4]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.3...0.1.4
 [0.1.3]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.2...0.1.3
 [0.1.2]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.1...0.1.2
 [0.1.1]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.0...0.1.1
