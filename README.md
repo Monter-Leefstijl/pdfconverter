@@ -166,7 +166,7 @@ Below is a table of environment variables that can be used to configure the serv
         cap_add:
           - SYS_ADMIN
         tmpfs:
-          - /tmp
+          - /tmp:size=512M
         restart: always
     ```
 
