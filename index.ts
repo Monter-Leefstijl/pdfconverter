@@ -15,6 +15,7 @@ const settings = {
   // Path to the Chrome executable
   chromeExecutablePath:
       process.env.CHROME_EXECUTABLE_PATH ?? "/usr/bin/chromium-browser",
+  // Path to the LibreOffice executable
   libreofficeExecutablePath:
       process.env.LIBREOFFICE_EXECUTABLE_PATH ?? "/usr/bin/libreoffice",
   // Path to the unoserver executable
