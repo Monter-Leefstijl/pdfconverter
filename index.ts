@@ -125,7 +125,7 @@ class UnoconvertError extends Error {}
 class UnoconvertTimeoutError extends Error {}
 
 /**
- * Manages the lifecycle of and communication to a LibreOffice unoserver instance.
+ * Manages the lifecycle of and communication to a LibreOffice (unoserver) instance.
  */
 class Unoserver {
   private unoserverProcess?: ChildProcess;
@@ -148,7 +148,7 @@ class Unoserver {
   async start(isRestart: boolean = false): Promise<void> {
     if (isRestart) {
       console.log(
-          `[${new Date().toUTCString()}] Restarting unoserver instance on port ${this.port}.`,
+          `[${new Date().toUTCString()}] Restarting LibreOffice instance on port ${this.port}.`,
       );
     }
 
@@ -157,7 +157,7 @@ class Unoserver {
 
       if (isRestart) {
         console.log(
-            `[${new Date().toUTCString()}] Unoserver instance on port ${this.port} restarted.`,
+            `[${new Date().toUTCString()}] LibreOffice instance on port ${this.port} restarted.`,
         );
       }
 
@@ -166,7 +166,7 @@ class Unoserver {
 
       this.unoserverProcess.on("exit", async () => {
         console.log(
-            `[${new Date().toUTCString()}] Unoserver with port ${this.port} disconnected. Restarting after 5 seconds.`,
+            `[${new Date().toUTCString()}] LibreOffice with port ${this.port} disconnected. Restarting after 5 seconds.`,
         );
 
         health.unoservers[this.port] = "unhealthy";
@@ -179,26 +179,26 @@ class Unoserver {
           const ppid = Number(fs.readFileSync(this.ppidFile));
 
           console.log(
-              `[${new Date().toUTCString()}] Killing associated LibreOffice process with PPID ${ppid} for unoserver on port ${this.port}.`,
+              `[${new Date().toUTCString()}] Killing LibreOffice process with PPID ${ppid}.`,
           );
 
           execSync(`pkill -9 -P ${ppid}`);
         } catch (error) {
           console.log(
-              `[${new Date().toUTCString()}] Failed to kill associated LibreOffice process for unoserver on port ${this.port} (${error}).`,
+              `[${new Date().toUTCString()}] Failed to kill LibreOffice process (${error}).`,
           );
         }
 
         // Ensure the user installation directory is removed
         try {
           console.log(
-              `[${new Date().toUTCString()}] Removing user installation directory for unoserver on port ${this.port}.`,
+              `[${new Date().toUTCString()}] Removing user installation directory for LibreOffice on port ${this.port}.`,
           );
 
           fs.rmSync(this.userInstallationDir, { recursive: true });
         } catch (error) {
           console.log(
-              `[${new Date().toUTCString()}] Failed to remove user installation directory for unoserver on port ${this.port} (${error}).`,
+              `[${new Date().toUTCString()}] Failed to remove user installation directory for LibreOffice on port ${this.port} (${error}).`,
           );
         }
 
@@ -208,11 +208,11 @@ class Unoserver {
     } catch (e) {
       if (isRestart) {
         console.log(
-            `[${new Date().toUTCString()}] Failed to restart unoserver on port ${this.port} (${e}). Retrying after 5 seconds.`,
+            `[${new Date().toUTCString()}] Failed to restart LibreOffice on port ${this.port} (${e}). Retrying after 5 seconds.`,
         );
       } else {
         console.log(
-            `[${new Date().toUTCString()}] Failed to start unoserver on port ${this.port} (${e}). Retrying after 5 seconds.`,
+            `[${new Date().toUTCString()}] Failed to start LibreOffice on port ${this.port} (${e}). Retrying after 5 seconds.`,
         );
       }
 
@@ -345,7 +345,7 @@ class Unoserver {
 
       process.on("error", () => {
         reject(
-            new Error(`Failed to spawn unoserver process on port ${this.port}`),
+            new Error(`Failed to spawn LibreOffice process on port ${this.port}`),
         );
       });
 
@@ -385,6 +385,8 @@ class Unoserver {
     });
   }
 }
+
+class ChromiumBrowser {}
 
 const unoserverPorts = _.range(2003, 2003 + Number(settings.maxConcurrentJobs));
 
@@ -770,7 +772,7 @@ async function initJobQueue() {
  */
 async function initUnoservers() {
   console.log(
-      `[${new Date().toUTCString()}] Starting ${settings.maxConcurrentJobs} unoserver instances (this can take a while).`,
+      `[${new Date().toUTCString()}] Starting ${settings.maxConcurrentJobs} LibreOffice instances (this can take a while).`,
   );
 
   for (const port of unoserverPorts) {
@@ -781,7 +783,7 @@ async function initUnoservers() {
   }
 
   console.log(
-      `[${new Date().toUTCString()}] ${settings.maxConcurrentJobs} unoserver instances started.`,
+      `[${new Date().toUTCString()}] ${settings.maxConcurrentJobs} LibreOffice instances started.`,
   );
 }
 
