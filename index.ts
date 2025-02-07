@@ -10,7 +10,7 @@ import express from "express";
 import morgan from "morgan";
 import multer, { MulterError } from "multer";
 import puppeteer, {
-  Browser,
+  Browser, ProtocolError,
   PuppeteerError,
   TimeoutError as PuppeteerTimeoutError,
 } from "puppeteer";
@@ -33,14 +33,14 @@ const settings = {
   // Path to the unoconvert executable
   unoconvertExecutablePath:
       process.env.UNOCONVERT_EXECUTABLE_PATH ?? "/usr/bin/unoconvert",
-  // Max time to wait for unoserver to launch
+  // Max time in milliseconds to wait for unoserver to launch
   unoserverLaunchTimeout: process.env.UNOSERVER_LAUNCH_TIMEOUT ?? 30 * 1000, // 30 seconds,
-  // Max time to wait for the browser to launch
+  // Max time in milliseconds to wait for the browser to launch
   chromeLaunchTimeout: process.env.CHROME_LAUNCH_TIMEOUT ?? 30 * 1000, // 30 seconds
-  // Interval to restart the browser
+  // Interval in milliseconds to restart the browser
   chromeRestartInterval:
       process.env.CHROME_RESTART_INTERVAL ?? 24 * 60 * 60 * 1000, // 1 day
-  // Max time to spend rendering a PDF
+  // Max time in milliseconds to spend rendering a PDF
   pdfRenderTimeout: process.env.PDF_RENDER_TIMEOUT ?? 2.5 * 60 * 1000, // 2.5 minutes
   // Max size of each uploaded file
   maxFileSize: process.env.MAX_FILE_SIZE ?? 128 * 1024 * 1024, // 128 MB
@@ -50,8 +50,12 @@ const settings = {
   maxQueuedJobs: process.env.MAX_QUEUED_JOBS ?? 128,
   // Max number of resources that can be uploaded
   maxResourceCount: process.env.MAX_RESOURCE_COUNT ?? 16,
-  // Max number of times processes can be restarted sequentially before giving up
+  // Max number of times processes can be restarted within 60 seconds before giving up
   maxRestarts: process.env.MAX_RESTARTS ?? 3,
+  // Interval in milliseconds to wait before restarting subprocesses
+  restartDelay: process.env.RESTART_DELAY ?? 5000, // 5 seconds
+  // Max number of times a process can fail before forcing a restart
+  maxFailureCount: process.env.MAX_FAILURE_COUNT ?? 8,
 };
 
 type Health = {
@@ -127,6 +131,11 @@ class UnoconvertError extends Error {}
 class UnoconvertTimeoutError extends Error {}
 
 /**
+ * Error thrown when the maximum number of restarts is exceeded.
+ */
+class MaxRestartsExceededError extends Error {}
+
+/**
  * Manages the lifecycle of and communication to a LibreOffice (unoserver) instance.
  */
 class Unoserver {
@@ -134,7 +143,6 @@ class Unoserver {
   private ppidFile: string;
   private userInstallationDir: string;
   private timesRestarted = 0;
-
   private available = false;
 
   constructor(private readonly port: number) {
@@ -150,35 +158,40 @@ class Unoserver {
 
   async start(): Promise<void> {
     if (this.timesRestarted > Number(settings.maxRestarts)) {
-      throw new Error(`Failed to (re)start LibreOffice on port ${this.port} after ${this.timesRestarted} attempts.`);
+      throw new MaxRestartsExceededError(`Failed to start LibreOffice on port ${this.port} after ${this.timesRestarted - 1} attempts.`);
     }
 
-    this.timesRestarted += 1;
-
     console.log(
-        `[${new Date().toUTCString()}] (Re)starting LibreOffice instance on port ${this.port}.`,
+        `[${new Date().toUTCString()}] Starting LibreOffice instance on port ${this.port}.`,
     );
+
+    this.timesRestarted += 1;
 
     try {
       await this.spawnUnoserverProcess();
 
       console.log(
-          `[${new Date().toUTCString()}] LibreOffice instance on port ${this.port} (re)started.`,
+          `[${new Date().toUTCString()}] LibreOffice instance on port ${this.port} started.`,
       );
 
       health.unoservers[this.port] = "healthy";
       this.available = true;
-      this.timesRestarted = 0;
+
+      const resetRestartedCounterTimeout = setTimeout(() => {
+        this.timesRestarted = 0;
+      }, Number(settings.restartDelay) * Number(settings.maxRestarts) * 2);
 
       this.unoserverProcess?.on("exit", async () => {
+        // Clear the reset timeout
+        clearTimeout(resetRestartedCounterTimeout);
+        // Mark the unoserver as unhealthy while it is restarting
+        health.unoservers[this.port] = "unhealthy";
+        // Mark the unoserver as unavailable while it is restarting
+        this.available = false;
+
         console.log(
             `[${new Date().toUTCString()}] LibreOffice with port ${this.port} disconnected. Restarting after 5 seconds.`,
         );
-
-        health.unoservers[this.port] = "unhealthy";
-
-        // Mark the unoserver as unavailable while it is restarting
-        this.available = false;
 
         // Ensure associated LibreOffice process is killed
         try {
@@ -208,15 +221,15 @@ class Unoserver {
           );
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await new Promise((resolve) => setTimeout(resolve, Number(settings.restartDelay)));
         await this.start();
       });
     } catch (e) {
       console.log(
-          `[${new Date().toUTCString()}] Failed to (re)start LibreOffice on port ${this.port} (${e}). Retrying after 5 seconds.`,
+          `[${new Date().toUTCString()}] Failed to start LibreOffice on port ${this.port} (${e}). Retrying after 5 seconds.`,
       );
 
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await new Promise((resolve) => setTimeout(resolve, Number(settings.restartDelay)));
       await this.start();
     }
   }
@@ -391,11 +404,16 @@ class Unoserver {
  */
 class ChromiumBrowser {
   private browserProcess?: RefCounted<Browser>;
-  private interval?: NodeJS.Timeout;
+  private restartInterval?: NodeJS.Timeout;
   private timesRestarted = 0;
 
   async start() {
-    console.log(`[${new Date().toUTCString()}] (Re)starting headless browser.`);
+    if (this.timesRestarted > Number(settings.maxRestarts)) {
+      throw new MaxRestartsExceededError(`Failed to start headless browser after ${this.timesRestarted - 1} attempts.`);
+    }
+
+    console.log(`[${new Date().toUTCString()}] Starting headless browser.`);
+    this.timesRestarted += 1;
 
     const oldBrowserProcess = this.browserProcess;
 
@@ -430,12 +448,17 @@ class ChromiumBrowser {
       );
 
       health.browser = "healthy";
-      this.timesRestarted = 0;
 
-      console.log(`[${new Date().toUTCString()}] Headless browser (re)started.`);
+      const resetRestartedCounterTimeout = setTimeout(() => {
+          this.timesRestarted = 0;
+      }, Number(settings.restartDelay) * Number(settings.maxRestarts) * 2);
+
+      console.log(`[${new Date().toUTCString()}] Headless browser started.`);
 
       try {
         newBrowserInstance.get().on("disconnected", async () => {
+          clearTimeout(resetRestartedCounterTimeout);
+
           if (newBrowserInstance.isMarkedForCollection()) {
             // If the browser instance is marked for collection, we do not restart it
             return;
@@ -448,17 +471,12 @@ class ChromiumBrowser {
           }
 
           health.browser = "unhealthy";
-          this.timesRestarted += 1;
 
           console.log(
               `[${new Date().toUTCString()}] Headless browser disconnected unexpectedly. Restarting after 5 seconds.`,
           );
 
-          if (this.timesRestarted > Number(settings.maxRestarts)) {
-            throw new Error(`Failed to (re)start headless browser after ${this.timesRestarted} attempts.`);
-          }
-
-          await new Promise((resolve) => setTimeout(resolve, 5000));
+          await new Promise((resolve) => setTimeout(resolve, Number(settings.restartDelay)));
           await this.start();
         });
       } finally {
@@ -468,18 +486,18 @@ class ChromiumBrowser {
       this.browserProcess = newBrowserInstance;
     } catch (error) {
       console.log(
-          `[${new Date().toUTCString()}] Failed to (re)start headless browser (${error}). Retrying after 5 seconds.`,
+          `[${new Date().toUTCString()}] Failed to start headless browser (${error}). Retrying after 5 seconds.`,
       );
 
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await new Promise((resolve) => setTimeout(resolve, Number(settings.restartDelay)));
       await this.start();
     } finally {
       oldBrowserProcess?.markForCollection();
     }
 
-    if (!this.interval) {
+    if (!this.restartInterval) {
       // Restart the browser periodically
-      this.interval = setInterval(async () => {
+      this.restartInterval = setInterval(async () => {
         await this.start();
       }, Number(settings.chromeRestartInterval));
     }
@@ -543,12 +561,10 @@ class ChromiumBrowser {
 
         await page.goto(host, { waitUntil: "load" });
 
-        const output = await page.pdf({
+        return await page.pdf({
           format: "A4",
           timeout: Number(settings.pdfRenderTimeout),
         });
-
-        return output;
       } finally {
         page.close();
       }
@@ -628,23 +644,26 @@ async function main() {
   });
 
   webserverInstance.get("/healthcheck", (req, res) => {
-    const statusCode = Object.values(health).every((status) => {
-      if (typeof status === "string") {
-        return status === "healthy";
-      } else {
-        return Object.values(status).every(
-            (subStatus) => subStatus === "healthy",
+    const healthy =
+        health.browser === "healthy" // The browser must be healthy
+        && health.webserver === "healthy" // The webserver must be healthy
+        && health.jobQueue === "healthy" // The jobqueue must be healthy
+        && Object.values(health.unoservers).some( // At least one unoserver must be healthy
+            (status) => status === "healthy"
         );
-      }
-    })
-        ? 200
-        : 503;
+
+    const statusCode = healthy ? 200 : 503;
 
     res.status(statusCode).json({ health }).send();
   });
 
-  // Initialize the other required services
-  await Promise.all([initBrowser(), initJobQueue(), initUnoservers()]);
+  try {
+    // Initialize the other required services
+    await Promise.all([initBrowser(), initJobQueue(), initUnoservers()]);
+  } catch (error) {
+    console.log(`[${new Date().toUTCString()}] Failed to start services (${error}).`);
+    process.exit(1);
+  }
 
   webserverInstance.options("/", (req, res) => {
     res
@@ -708,57 +727,66 @@ function pushConversionJob(conversionJob: ConversionJob) {
 
 function createConversionJob(req: express.Request, res: express.Response) {
   return async () => {
-    // TypeScript doesn't recognize the Multer fields
-    // @ts-ignore
-    const input = (req.files?.input ?? []) as Express.Multer.File[];
-    // @ts-ignore
-    const resources = (req.files?.resources ?? []) as Express.Multer.File[];
-
-    if (
-        !Array.isArray(input) ||
-        input.length !== 1 ||
-        !Array.isArray(resources) ||
-        resources.length > Number(settings.maxResourceCount)
-    ) {
-      // Bad request
-      res.status(400).send();
-      return;
-    }
-
     try {
-      const conversionResult = await convert(input[0], resources);
-
-      const output = conversionResult.output;
-      const mimeType = conversionResult.mimeType;
-
-      res.setHeader("Content-Type", mimeType).status(200).send(output);
+      await handleConversionJob(req, res);
     } catch (error) {
-      console.log(
-          `[${new Date().toUTCString()}] Failed to generate PDF (${error}).`,
-      );
-
-      if (
-          error instanceof PuppeteerTimeoutError ||
-          error instanceof UnoconvertTimeoutError
-      ) {
-        // Gateway timeout
-        res.status(504).send();
-      } else if (
-          error instanceof PuppeteerError ||
-          error instanceof UnoconvertError
-      ) {
-        // Bad gateway
-        res.status(502).send();
-      } else if (error instanceof MediaTypeError) {
-        // Unsupported media type
-        res.status(415).send();
-      } else {
-        // Internal server error
-        console.error(error);
-        res.status(500).send();
-      }
+      console.log(`[${new Date().toUTCString()}] Conversion job failed.`);
+      console.error(error);
     }
   };
+}
+
+async function handleConversionJob(req: express.Request, res: express.Response) {
+  // TypeScript doesn't recognize the Multer fields
+  // @ts-ignore
+  const input = (req.files?.input ?? []) as Express.Multer.File[];
+  // @ts-ignore
+  const resources = (req.files?.resources ?? []) as Express.Multer.File[];
+
+  if (
+      !Array.isArray(input) ||
+      input.length !== 1 ||
+      !Array.isArray(resources) ||
+      resources.length > Number(settings.maxResourceCount)
+  ) {
+    // Bad request
+    res.status(400).send();
+    return;
+  }
+
+  try {
+    const conversionResult = await convert(input[0], resources);
+
+    const output = conversionResult.output;
+    const mimeType = conversionResult.mimeType;
+
+    res.setHeader("Content-Type", mimeType).status(200).send(output);
+  } catch (error) {
+    console.log(
+        `[${new Date().toUTCString()}] Failed to generate PDF (${error}).`,
+    );
+
+    if (
+        error instanceof PuppeteerTimeoutError ||
+        error instanceof UnoconvertTimeoutError
+    ) {
+      // Gateway timeout
+      res.status(504).send();
+    } else if (
+        error instanceof PuppeteerError  ||
+        error instanceof ProtocolError ||
+        error instanceof UnoconvertError
+    ) {
+      // Bad gateway
+      res.status(502).send();
+    } else if (error instanceof MediaTypeError) {
+      // Unsupported media type
+      res.status(415).send();
+    } else {
+      // Internal server error
+      res.status(500).send();
+    }
+  }
 }
 
 /**
@@ -813,7 +841,9 @@ async function initJobQueue() {
   console.log(`[${new Date().toUTCString()}] Starting job queue.`);
 
   jobQueue = queue(async (job, callback) => {
-    await job();
+    try {
+      await job();
+    } catch (error) {}
     callback();
   }, Number(settings.maxConcurrentJobs));
 
@@ -828,19 +858,22 @@ async function initJobQueue() {
  */
 async function initUnoservers() {
   console.log(
-      `[${new Date().toUTCString()}] Starting ${settings.maxConcurrentJobs} LibreOffice instances (this can take a while).`,
+      `[${new Date().toUTCString()}] Starting ${settings.maxConcurrentJobs} LibreOffice instances.`,
   );
 
   for (const port of unoserverPorts) {
     const unoserverInstance = new Unoserver(port);
-    await unoserverInstance.start();
-
     unoserverInstances.push(unoserverInstance);
   }
 
-  console.log(
-      `[${new Date().toUTCString()}] ${settings.maxConcurrentJobs} LibreOffice instances started.`,
-  );
+  const promises = unoserverInstances.map((unoserverInstance) => unoserverInstance.start());
+  await Promise.any(promises);
+
+  Promise.all(promises).then(() => {
+    console.log(
+        `[${new Date().toUTCString()}] All ${settings.maxConcurrentJobs} LibreOffice instances started.`,
+    );
+  });
 }
 
 /**
