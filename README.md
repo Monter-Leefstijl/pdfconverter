@@ -139,6 +139,8 @@ Below is a table of environment variables that can be used to configure the serv
 | `MAX_CONCURRENT_JOBS`         | The maximum number of concurrent jobs. Settings this to a high value may cause unexpected behaviour. | `6`                         | 
 | `MAX_QUEUED_JOBS`             | The maximum number of jobs in the queue.                                                             | `128`                       |
 | `MAX_RESOURCE_COUNT`          | The maximum number of resources (e.g. images) that can be uploaded.                                  | `16`                        |
+| `MAX_RESTARTS`                | The maximum number of times processes can be restarted within 60 seconds before giving up.           | `3`                         |
+| `RESTART_DELAY`               | The interval in milliseconds to wait before restarting subprocesses. | `5000` (5 seconds)          |
 
 ## Installation
 

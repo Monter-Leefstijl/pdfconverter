@@ -54,8 +54,6 @@ const settings = {
   maxRestarts: process.env.MAX_RESTARTS ?? 3,
   // Interval in milliseconds to wait before restarting subprocesses
   restartDelay: process.env.RESTART_DELAY ?? 5000, // 5 seconds
-  // Max number of times a process can fail before forcing a restart
-  maxFailureCount: process.env.MAX_FAILURE_COUNT ?? 8,
 };
 
 type Health = {
@@ -566,7 +564,9 @@ class ChromiumBrowser {
           timeout: Number(settings.pdfRenderTimeout),
         });
       } finally {
-        page.close();
+        page.close().catch(() => {
+          console.log("[${new Date().toUTCString()}] Failed to close page.");
+        });
       }
     } finally {
       this.browserProcess?.release();
@@ -596,7 +596,7 @@ class ChromiumBrowser {
           }
         } catch (e) {
           console.log(
-              `[${new Date().toUTCString()}] Failed to remove temporary browser data directory.`,
+              `[${new Date().toUTCString()}] Failed to remove temporary browser data directory (${e}).`,
           );
         }
       }
@@ -841,9 +841,7 @@ async function initJobQueue() {
   console.log(`[${new Date().toUTCString()}] Starting job queue.`);
 
   jobQueue = queue(async (job, callback) => {
-    try {
-      await job();
-    } catch (error) {}
+    await job();
     callback();
   }, Number(settings.maxConcurrentJobs));
 
