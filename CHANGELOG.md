@@ -9,8 +9,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
-## [0.1.5] - 2025-04-18
-
 ### Added
 
 - Add the `MAX_RESTARTS` option to limit the number of times a process can be restarted within 60 seconds before giving up.
