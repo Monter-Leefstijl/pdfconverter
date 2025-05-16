@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [unreleased]
 
+## [0.2.0] - 2025-05-16
+
 ### Added
 
 - Add the `MAX_RESTARTS` option to limit the number of times a process can be restarted within 60 seconds before giving up.
@@ -62,7 +64,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Add the endpoint for converting documents to PDF.
 - Add the endpoint to retrieve the health of an instance.
 
-[unreleased]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.4...HEAD
+[unreleased]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.2.0...HEAD
+[0.2.0]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.4...0.2.0
 [0.1.4]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.3...0.1.4
 [0.1.3]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.2...0.1.3
 [0.1.2]: https://github.com/Monter-Leefstijl/pdfconverter/compare/0.1.1...0.1.2
