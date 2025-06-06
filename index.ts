@@ -5,6 +5,7 @@ import {
   spawn,
   execSync,
 } from "child_process";
+import chardet from "chardet";
 import crypto from "crypto";
 import express from "express";
 import morgan from "morgan";
@@ -511,6 +512,7 @@ class ChromiumBrowser {
     try {
       const host = `http://${crypto.randomBytes(16).toString("hex")}/`;
       const page = await browser.newPage();
+      const encoding = chardet.detect(input)?.toLowerCase() || "utf-8";
 
       try {
         page.setDefaultTimeout(Number(settings.pdfRenderTimeout));
@@ -527,7 +529,7 @@ class ChromiumBrowser {
             // Respond with the input HTML if the request is for the host
             request.respond({
               status: 200,
-              contentType: "text/html",
+              contentType: `text/html;charset=${encoding}`,
               body: input,
               headers: { "Access-Control-Allow-Origin": host },
             });
