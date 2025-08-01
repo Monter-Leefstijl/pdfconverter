@@ -141,3 +141,6 @@ index.js
 
 # MacOS
 .DS_Store
+
+# Docker
+docker-compose.yml

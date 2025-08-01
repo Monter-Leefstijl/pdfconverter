@@ -10,7 +10,17 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-RUN apk add --no-cache chromium curl dumb-init libreoffice py-pip
+RUN apk add --no-cache \
+    chromium  \
+    curl  \
+    dumb-init  \
+    fontconfig \
+    icu-libs \
+    libreoffice  \
+    pandoc \
+    py-pip  \
+    texlive-full \
+    ttf-freefont
 RUN pip install unoserver --break-system-packages && apk del py-pip
 
 COPY --from=builder /app/package.json .

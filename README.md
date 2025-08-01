@@ -8,25 +8,25 @@ restarts.
 
 It is used in production by [Monter Leefstijl](https://www.monterleefstijl.nl/).
 
-## Chromium and LibreOffice
+## Chromium, LibreOffice, and Pandoc
 
-Monter PDF Converter uses **Chromium** and **LibreOffice** to convert to PDFs to faithfully reproduce the formatting and
-layout of the original documents.
+Monter PDF Converter uses **Chromium**, **LibreOffice** and **Pandoc** to convert to PDFs to faithfully reproduce the
+formatting and layout of the original documents.
 
 - **Chromium**: For converting HTML files, Chromium is well-suited because it accurately renders HTML, CSS, and 
   JavaScript, and supports modern web standards, ensuring that styles, fonts and other elements are preserved.
 - **LibreOffice**: For conversion from Word, Excel, PowerPoint and other document formats, LibreOffice is well-suited
   because of its ability to produce clean, high-quality PDFs with proper formatting and layout.
+- **Pandoc**: For other documents, Pandoc is used.
 
 ## Key features
 
-- **High-quality PDFs**: Uses Chromium (for HTML) and LibreOffice (for other documents) to produce high-quality PDFs.
-- **Multi-format support**: Converts HTML, DOCX, PPTX, XLSX, and other document formats to PDF.
+- **High-quality PDFs**: Uses Chromium (for HTML), LibreOffice (for documents) and Pandoc (for other files) to produce high-quality PDFs.
+- **Multi-format support**: Converts HTML, DOCX, PPTX, XLSX, and many other formats to PDF.
 - **Fast and concurrent**: Handles multiple conversion jobs concurrently and queues additional jobs.
 - **Health checks**: Provides a health check endpoint to monitor the service status.
 - **High-availability**: Ensures high-availability by automatically restarting child services (i.e. Chromium and LibreOffice) in case of failure.
 - **Highly configurable**: Allows customization of various settings through environment variables.
-- **Lightweight**: The entire source code is under 1000 LOC.
 
 ## Endpoints
 
@@ -49,22 +49,32 @@ curl --location 'http://localhost:8080' \
 The endpoint accept a `multipart/form-data` request with the following fields:
 
 - `input` (*required*): The document to convert.
-- `resources` (*optional*): Additional resources for conversion from `.html` and `.xhtml` to PDF.
+- `resources` (*optional*): Additional resources for conversion using Chromium.
+- `type` (*optional*): The type of the given document. Only applicable when Pandoc is used. If no type is given, it is inferred from the MIME-type or the filename if possible.
 
 The `input` field should contain a document with one of the following MIME-types:
 
-- `text/html`: `.html` files;
-- `application/xhtml+xml`: `.xhtml` files;
-- `application/msword`: `.doc` and `.dot` files;
-- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`: `.docx` files;
-- `application/vnd.ms-excel`: `.xls`, `.xlt` and `.xla` files;
-- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`: `.xlsx` files;
-- `application/vnd.ms-powerpoint`: `.ppt`, `.pot`, `.pps` and `.ppa` files;
-- `application/vnd.openxmlformats-officedocument.presentationml.presentation`: `.pptx` files.
-- `application/vnd.oasis.opendocument.presentation`: `.odp` files.
-- `application/vnd.oasis.opendocument.spreadsheet`: `.ods` files.
-- `application/vnd.oasis.opendocument.text`: `.odt` files.
-- `application/pdf`: `.pdf` files.
+- `text/html` (Chromium): `.html` files;
+- `application/xhtml+xml` (Chromium): `.xhtml` files;
+- `application/msword` (LibreOffice): `.doc` and `.dot` files;
+- `application/vnd.openxmlformats-officedocument.wordprocessingml.document` (LibreOffice): `.docx` files;
+- `application/vnd.ms-excel` (LibreOffice): `.xls`, `.xlt` and `.xla` files;
+- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` (LibreOffice): `.xlsx` files;
+- `application/vnd.ms-powerpoint` (LibreOffice): `.ppt`, `.pot`, `.pps` and `.ppa` files;
+- `application/vnd.openxmlformats-officedocument.presentationml.presentation` (LibreOffice): `.pptx` files.
+- `application/vnd.oasis.opendocument.presentation` (LibreOffice): `.odp` files.
+- `application/vnd.oasis.opendocument.spreadsheet` (LibreOffice): `.ods` files.
+- `application/vnd.oasis.opendocument.text` (LibreOffice): `.odt` files.
+- `text/markdown` (Pandoc): `.md` files.
+- `text/x-rst` (Pandoc): `.rst` files.
+- `application/epub+zip` (Pandoc): `.epub` files.
+- `application/json` (Pandoc): `.json` files.
+- `application/vnd.jupyter` (Pandoc): `.ipynb` files.
+- `text/csv` (Pandoc): `.csv` files.
+- `text/tab-separated-values` (Pandoc): `.tsv` files.
+- `application/xml` (Pandoc): `.xml` files.
+- `application/pdf` (none): `.pdf` files.
+- `text/plain` (Pandoc): other files.
 
 The `resources` field can contain additional resources for conversion from `.html` and `.xhtml` that cannot be embedded in
 the file itself. For example, if the file contains an image tag referencing `dog.jpg`, it may be included as a resource
@@ -77,7 +87,7 @@ to have it be displayed in the PDF.
 - `400 Bad Request`: The request is invalid (e.g. missing required `input` field).
 - `413 Payload Too Large`: The document is too large to be processed.
 - `415 Unsupported Media Type`: The document type is not supported.
-- `502 Bad Gateway`: The conversion failed in LibreOffice or Chromium.
+- `502 Bad Gateway`: The conversion failed in Chromium, LibreOffice or Pandoc.
 - `503 Service Unavailable`: The request is denied because the job queue is full.
 - `504 Gateway Timeout`: The conversion took too long to complete.
 
@@ -100,6 +110,7 @@ The endpoint accepts a `GET` request with no parameters.
 {
     "health": {
         "browser": "healthy",
+        "pandoc": "healthy",
         "unoservers": {
             "2003": "healthy",
             "2004": "healthy",
@@ -124,23 +135,24 @@ The endpoint accepts a `GET` request with no parameters.
 
 Below is a table of environment variables that can be used to configure the service.
 
-| Name                          | Description                                                                                          | Default value               |
-|-------------------------------|------------------------------------------------------------------------------------------------------|-----------------------------|
-| `WEBSERVER_PORT`              | The port the web server listens on.                                                                  | `8080`                      |
-| `CHROME_EXECUTABLE_PATH`      | The path to the Chrome executable.                                                                   | `/usr/bin/chromium-browser` |
-| `LIBREOFFICE_EXECUTABLE_PATH` | The path to the LibreOffice executable.                                                              | `/usr/bin/libreoffice`      |
-| `UNOSERVER_EXECUTABLE_PATH`   | The path to the Unoserver executable.                                                                | `/usr/bin/unoserver`        |
-| `UNOCONVERT_EXECUTABLE_PATH`  | The path to the Unoconvert executable.                                                               | `/usr/bin/unoconvert`       |
-| `UNOSERVER_LAUNCH_TIMEOUT`    | The maximum time to wait in milliseconds for unoserver to launch.                                    | `30000` (30 seconds)        |
-| `CHROME_LAUNCH_TIMEOUT`       | The maximum time to wait in milliseconds for Chrome to launch.                                       | `30000` (30 seconds)        |
-| `CHROME_RESTART_INTERVAL`     | The interval in milliseconds to restart the browser.                                                 | `86400000` (1 day)          |
-| `PDF_RENDER_TIMEOUT`          | The maximum time to spend rendering a single PDF.                                                    | `150000` (2.5 minutes)      |
-| `MAX_FILE_SIZE`               | The maximum size in bytes for each uploaded file.                                                    | `134217728` (128 MB)        |
+| Name                          | Description                                                                                         | Default value               |
+|-------------------------------|-----------------------------------------------------------------------------------------------------|-----------------------------|
+| `WEBSERVER_PORT`              | The port the web server listens on.                                                                 | `8080`                      |
+| `CHROME_EXECUTABLE_PATH`      | The path to the Chrome executable.                                                                  | `/usr/bin/chromium-browser` |
+| `LIBREOFFICE_EXECUTABLE_PATH` | The path to the LibreOffice executable.                                                             | `/usr/bin/libreoffice`      |
+| `UNOSERVER_EXECUTABLE_PATH`   | The path to the Unoserver executable.                                                               | `/usr/bin/unoserver`        |
+| `UNOCONVERT_EXECUTABLE_PATH`  | The path to the Unoconvert executable.                                                              | `/usr/bin/unoconvert`       |
+| `UNOSERVER_LAUNCH_TIMEOUT`    | The maximum time to wait in milliseconds for unoserver to launch.                                   | `30000` (30 seconds)        |
+| `PANDOC_EXECUTABLE_PATH`      | The path to the Pandoc executable.                                                                  | `/usr/bin/pandoc`           |
+| `CHROME_LAUNCH_TIMEOUT`       | The maximum time to wait in milliseconds for Chrome to launch.                                      | `30000` (30 seconds)        |
+| `CHROME_RESTART_INTERVAL`     | The interval in milliseconds to restart the browser.                                                | `86400000` (1 day)          |
+| `PDF_RENDER_TIMEOUT`          | The maximum time to spend rendering a single PDF.                                                   | `150000` (2.5 minutes)      |
+| `MAX_FILE_SIZE`               | The maximum size in bytes for each uploaded file.                                                   | `134217728` (128 MB)        |
 | `MAX_CONCURRENT_JOBS`         | The maximum number of concurrent jobs. Settings this to a high value may cause unexpected behaviour. | `6`                         | 
-| `MAX_QUEUED_JOBS`             | The maximum number of jobs in the queue.                                                             | `128`                       |
-| `MAX_RESOURCE_COUNT`          | The maximum number of resources (e.g. images) that can be uploaded.                                  | `16`                        |
-| `MAX_RESTARTS`                | The maximum number of times processes can be restarted within 60 seconds before giving up.           | `3`                         |
-| `RESTART_DELAY`               | The interval in milliseconds to wait before restarting subprocesses.                                 | `5000` (5 seconds)          |
+| `MAX_QUEUED_JOBS`             | The maximum number of jobs in the queue.                                                            | `128`                       |
+| `MAX_RESOURCE_COUNT`          | The maximum number of resources (e.g. images) that can be uploaded.                                 | `16`                        |
+| `MAX_RESTARTS`                | The maximum number of times processes can be restarted within 60 seconds before giving up.          | `3`                         |
+| `RESTART_DELAY`               | The interval in milliseconds to wait before restarting subprocesses.                                | `5000` (5 seconds)          |
 
 ## Installation
 
