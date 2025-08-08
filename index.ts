@@ -8,6 +8,7 @@ import {
 import chardet from "chardet";
 import crypto from "crypto";
 import express from "express";
+import iconv from "iconv-lite";
 import morgan from "morgan";
 import multer, { MulterError } from "multer";
 import puppeteer, {
@@ -36,6 +37,9 @@ const settings = {
       process.env.UNOCONVERT_EXECUTABLE_PATH ?? "/usr/bin/unoconvert",
   // Max time in milliseconds to wait for unoserver to launch
   unoserverLaunchTimeout: process.env.UNOSERVER_LAUNCH_TIMEOUT ?? 30 * 1000, // 30 seconds,
+  // Path to the Pandoc executable
+  pandocExecutablePath:
+      process.env.PANDOC_EXECUTABLE_PATH ?? "/usr/bin/pandoc",
   // Max time in milliseconds to wait for the browser to launch
   chromeLaunchTimeout: process.env.CHROME_LAUNCH_TIMEOUT ?? 30 * 1000, // 30 seconds
   // Interval in milliseconds to restart the browser
@@ -60,6 +64,7 @@ const settings = {
 type Health = {
   browser: "healthy" | "unhealthy";
   webserver: "healthy" | "unhealthy";
+  pandoc: "healthy" | "unhealthy";
   jobQueue: "healthy" | "unhealthy";
   unoservers: Record<number, "healthy" | "unhealthy">;
 };
@@ -128,6 +133,16 @@ class UnoconvertError extends Error {}
  * Error thrown when conversion using LibreOffice timed out.
  */
 class UnoconvertTimeoutError extends Error {}
+
+/**
+ * Error thrown when conversion using Pandoc failed.
+ */
+class PandocError extends Error {}
+
+/**
+ * Error thrown when conversion using Pandoc timed out.
+ */
+class PandocTimeoutError extends Error {}
 
 /**
  * Error thrown when the maximum number of restarts is exceeded.
@@ -606,15 +621,275 @@ class ChromiumBrowser {
   }
 }
 
+/**
+ * Manages communication to a Pandoc executable.
+ */
+class Pandoc {
+  async start(): Promise<void> {
+    console.log(`[${new Date().toUTCString()}] Checking Pandoc executable.`);
+
+    return new Promise((resolve, reject) => {
+      fs.access(settings.pandocExecutablePath, fs.constants.X_OK, (err) => {
+        if (!err) {
+          console.log(`[${new Date().toUTCString()}] Pandoc executable found.`);
+
+          health.pandoc = "healthy";
+          resolve();
+        } else {
+          console.log(`[${new Date().toUTCString()}] Pandoc executable not found.`);
+
+          reject();
+        }
+      });
+    });
+  }
+
+  async convert(input: Buffer, fromType: string): Promise<Buffer> {
+    const pandocProcess = await this.spawnPandocProcess(fromType);
+
+    return await new Promise((resolve, reject) => {
+      let outData = Buffer.alloc(128, "");
+      let errData = Buffer.alloc(128, "");
+
+      const timeoutHandler = setTimeout(() => {
+        pandocProcess.kill("SIGKILL");
+
+        reject(new PandocTimeoutError("Pandoc process timed out"));
+      }, Number(settings.pdfRenderTimeout));
+
+      pandocProcess.on("close", (code) => {
+        clearTimeout(timeoutHandler);
+
+        if (code === 0) {
+          resolve(outData);
+        } else {
+          reject(
+            new PandocError(
+              `Pandoc process exited with code ${code}: ${errData.toString()}`,
+            ),
+          );
+        }
+      });
+
+      // Read the output and error pipes 'outData' and 'errData'
+      pandocProcess.stdout.on(
+          "data",
+          (data) => (outData = Buffer.concat([outData, data])),
+      );
+      pandocProcess.stderr.on(
+          "data",
+          (data) => (errData = Buffer.concat([errData, data])),
+      );
+
+      // Determine the encoding of the input buffer
+      const encoding = chardet.detect(input)?.toLowerCase() || "utf-8";
+
+      if (encoding.toLowerCase() !== "utf-8") {
+        // Transform the input to UTF-8 if it is not already (see https://pandoc.org/MANUAL.html#character-encoding).
+        input = Buffer.from(iconv.decode(input, encoding), "utf-8");
+      }
+
+      // Write the input to the input pipe
+      pandocProcess.stdin.write(input);
+
+      // Close the input pipe to start the conversion
+      pandocProcess.stdin.end();
+    });
+  }
+
+  private async spawnPandocProcess(fromType: string): Promise<ChildProcessWithoutNullStreams> {
+    const args = [
+      "--from",
+      fromType,
+      "--to",
+      "pdf",
+      "--out",
+      "-",
+      "--pdf-engine",
+      "xelatex",
+      "--standalone",
+      "--sandbox=true",
+    ];
+
+    const process = spawn(settings.pandocExecutablePath, args, {
+      stdio: "pipe",
+    });
+
+    return new Promise((resolve, reject) => {
+      process.on("error", async () => {
+        reject(new PandocError(`Failed to spawn Pandoc process`));
+      });
+
+      process.on("spawn", () => {
+        resolve(process);
+      });
+    });
+  }
+}
+
 const unoserverPorts = _.range(2003, 2003 + Number(settings.maxConcurrentJobs));
 
 let browserInstance: ChromiumBrowser;
+let pandocInstance: Pandoc;
 let unoserverInstances: Unoserver[] = [];
 let webserverInstance: express.Express;
 let jobQueue: QueueObject<ConversionJob>;
 
+const extensionToType: Record<string, string> = {
+  // Bibliography formats
+  '.bib': 'bibtex',
+  '.bibtex': 'bibtex',
+  '.biblatex': 'biblatex',
+  '.ris': 'ris',
+  '.json': 'json',
+  '.csljson': 'csljson',
+
+  // HTML
+  '.html': 'html',
+  '.htm': 'html',
+  '.xhtml': 'html',
+
+  // PDF
+  '.pdf': 'pdf',
+
+  // Markdown variants
+  '.md': 'markdown',
+  '.markdown': 'markdown',
+  '.mkd': 'markdown',
+  '.mdown': 'markdown',
+  '.mkdn': 'markdown',
+  '.mdwn': 'markdown',
+  '.mdtxt': 'markdown',
+  '.mdtext': 'markdown',
+  '.mmd': 'markdown_mmd',
+  '.text': 'markdown',
+  '.commonmark': 'commonmark',
+  '.dj': 'djot',
+
+  // Other lightweight markup
+  '.creole': 'creole',
+  '.wiki': 'mediawiki',
+  '.dokuwiki': 'dokuwiki',
+  '.tiki': 'tikiwiki',
+  '.twiki': 'twiki',
+  '.vimwiki': 'vimwiki',
+  '.org': 'org',
+  '.textile': 'textile',
+  '.t2t': 't2t',
+
+  // ReST, LaTeX, etc.
+  '.rst': 'rst',
+  '.tex': 'latex',
+
+  // Word processing formats
+  '.rtf': 'rtf',
+  '.doc': 'docx',
+  '.dot': 'docx',
+  '.docx': 'docx',
+  '.xsl': 'xlsx',
+  '.xlt': 'xlsx',
+  '.xla': 'xlsx',
+  '.xlsx': 'xlsx',
+  '.ppt': 'pptx',
+  '.pot': 'pptx',
+  '.pps': 'pptx',
+  '.ppa': 'pptx',
+  '.pptx': 'pptx',
+  '.odp': 'opendocument',
+  '.ods': 'opendocument',
+  '.odt': 'odt',
+
+  // E-books
+  '.epub': 'epub',
+  '.fb2': 'fb2',
+
+  // Data tables
+  '.csv': 'csv',
+  '.tsv': 'tsv',
+
+  // Jupyter notebooks
+  '.ipynb': 'ipynb',
+
+  // OPML
+  '.opml': 'opml',
+
+  // Manual pages
+  '.man': 'man',
+  '.mdoc': 'mdoc',
+
+  // Emacs Muse
+  '.muse': 'muse',
+
+  // Haddock
+  '.hs': 'haddock',
+
+  // Perl POD
+  '.pod': 'pod',
+
+  // Typst
+  '.typ': 'typst',
+};
+
+const mimeToType: Record<string, string> = {
+  // HTML
+  'text/html': 'html',
+  'application/xhtml+xml': 'html',
+
+  // PDF
+  'application/pdf': 'pdf',
+
+  // Markdown
+  'text/markdown': 'markdown',
+  'text/x-markdown': 'markdown',
+
+  // ReST
+  'text/x-rst': 'rst',
+
+  // Word processing
+  'application/rtf': 'rtf',
+  'application/msword': 'docx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xlsx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.ms-powerpoint': 'pptx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'application/vnd.oasis.opendocument.presentation': 'opendocument',
+  'application/vnd.oasis.opendocument.spreadsheet': 'opendocument',
+  'application/vnd.oasis.opendocument.text': 'odt',
+
+  // E-books
+  'application/epub+zip': 'epub',
+  'application/x-fictionbook+xml': 'fb2',
+
+  // Bibliography
+  'application/x-bibtex': 'bibtex',
+  'application/x-biblatex': 'biblatex',
+  'application/ris': 'ris',
+  'application/vnd.citationstyles.csl+json': 'csljson',
+
+  // Data tables
+  'text/csv': 'csv',
+  'text/tab-separated-values': 'tsv',
+
+  // Jupyter
+  'application/vnd.jupyter': 'ipynb',
+
+  // OPML
+  'text/x-opml': 'opml',
+
+  // POD
+  'application/x-perl': 'pod',
+
+  // Typst
+  'application/x-typst': 'typst',
+
+  // Generic JSON AST
+  'application/json': 'json',
+};
+
 const health: Health = {
   browser: "unhealthy",
+  pandoc: "unhealthy",
   unoservers: unoserverPorts.reduce(
       (acc: Record<number, "healthy" | "unhealthy">, port: number) => {
         acc[port] = "unhealthy";
@@ -649,6 +924,7 @@ async function main() {
     const healthy =
         health.browser === "healthy" // The browser must be healthy
         && health.webserver === "healthy" // The webserver must be healthy
+        && health.pandoc === "healthy" // Pandoc must be healthy
         && health.jobQueue === "healthy" // The jobqueue must be healthy
         && Object.values(health.unoservers).some( // At least one unoserver must be healthy
             (status) => status === "healthy"
@@ -661,7 +937,7 @@ async function main() {
 
   try {
     // Initialize the other required services
-    await Promise.all([initBrowser(), initJobQueue(), initUnoservers()]);
+    await Promise.all([initBrowser(), initJobQueue(), initUnoservers(), initPandoc()]);
   } catch (error) {
     console.log(`[${new Date().toUTCString()}] Failed to start services (${error}).`);
     process.exit(1);
@@ -744,12 +1020,15 @@ async function handleConversionJob(req: express.Request, res: express.Response) 
   const input = (req.files?.input ?? []) as Express.Multer.File[];
   // @ts-ignore
   const resources = (req.files?.resources ?? []) as Express.Multer.File[];
+  // @ts-ignore
+  const type = req.body?.type;
 
   if (
-      !Array.isArray(input) ||
-      input.length !== 1 ||
-      !Array.isArray(resources) ||
-      resources.length > Number(settings.maxResourceCount)
+    !Array.isArray(input) ||
+    input.length !== 1 ||
+    !Array.isArray(resources) ||
+    resources.length > Number(settings.maxResourceCount) ||
+    (type !== undefined && typeof type !== 'string' && !(type instanceof String))
   ) {
     // Bad request
     res.status(400).send();
@@ -757,7 +1036,7 @@ async function handleConversionJob(req: express.Request, res: express.Response) 
   }
 
   try {
-    const conversionResult = await convert(input[0], resources);
+    const conversionResult = await convert(input[0], resources, type);
 
     const output = conversionResult.output;
     const mimeType = conversionResult.mimeType;
@@ -770,14 +1049,16 @@ async function handleConversionJob(req: express.Request, res: express.Response) 
 
     if (
         error instanceof PuppeteerTimeoutError ||
-        error instanceof UnoconvertTimeoutError
+        error instanceof UnoconvertTimeoutError ||
+        error instanceof PandocTimeoutError
     ) {
       // Gateway timeout
       res.status(504).send();
     } else if (
         error instanceof PuppeteerError  ||
         error instanceof ProtocolError ||
-        error instanceof UnoconvertError
+        error instanceof UnoconvertError ||
+        error instanceof PandocError
     ) {
       // Bad gateway
       res.status(502).send();
@@ -887,45 +1168,119 @@ async function initBrowser() {
 }
 
 /**
+ * Initializes Pandoc.
+ *
+ * @see https://pandoc.org/
+ */
+async function initPandoc() {
+  pandocInstance = new Pandoc();
+  await pandocInstance.start();
+}
+
+/**
+ * Tries to determine the given file's type.
+ */
+function determineType(input: Express.Multer.File): string | undefined {
+  if (input.mimetype && mimeToType[input.mimetype]) {
+    return mimeToType[input.mimetype];
+  }
+
+  const ext = path.extname(input.originalname).toLowerCase();
+
+  if (ext && extensionToType[ext]) {
+    return extensionToType[ext];
+  }
+
+  console.log(
+      `[${new Date().toUTCString()}] Failed to determine file type.`,
+  );
+
+  return undefined;
+}
+
+/**
  * Converts the given input file and resources to a PDF using an appropriate converter.
  */
 async function convert(
     input: Express.Multer.File,
     resources: Express.Multer.File[],
+    type?: string,
 ): Promise<ConversionResult> {
-  switch (input.mimetype) {
-    case "text/html":
-    case "application/xhtml+xml":
-      return await convertHtml(input, resources);
-    case "application/msword": // .doc, .dot
-    case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": // .docx
-    case "application/vnd.ms-excel": // .xls, .xlt, .xla
-    case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": // .xlsx
-    case "application/vnd.ms-powerpoint": // .ppt, .pot, .pps, .ppa
-    case "application/vnd.openxmlformats-officedocument.presentationml.presentation": // .pptx
-    case "application/vnd.oasis.opendocument.presentation": // .odp
-    case "application/vnd.oasis.opendocument.spreadsheet": // .ods
-    case "application/vnd.oasis.opendocument.text": // .odt
-      return await convertDocument(input);
-    case "application/pdf": // .pdf
-      return convertPdf(input);
+  const determinedType = determineType(input);
+  const inputType = type || determinedType;
+
+  if (!inputType) {
+    throw new MediaTypeError(`Unknown type: ${input.mimetype}`);
+  }
+
+  if (determinedType && determinedType !== inputType) {
+    throw new MediaTypeError(`Invalid type: the determined type ${determinedType} does not match the specified type ${type}.`);
+  }
+
+  switch (inputType) {
+    case "html":
+      return await convertChrome(input, resources);
+    case "rtf":
+    case "docx":
+    case "xlsx":
+    case "pptx":
+    case "opendocument":
+    case "odt":
+      return await convertLibreOffice(input);
+    case "bibtex":
+    case "biblatex":
+    case "ris":
+    case "json":
+    case "clsjson":
+    case "markdown":
+    case "markdown_mmd":
+    case "commonmark":
+    case "djot":
+    case "creole":
+    case "mediawiki":
+    case "dokuwiki":
+    case "tikiwiki":
+    case "twiki":
+    case "vimwiki":
+    case "org":
+    case "textile":
+    case "t2t":
+    case "rst":
+    case "latex":
+    case "epub":
+    case "fb2":
+    case "csv":
+    case "tsv":
+    case "ipynb":
+    case "opml":
+    case "man":
+    case "mdoc":
+    case "muse":
+    case "haddock":
+    case "pod":
+    case "typst":
+    case "docbook":
+    case "jats":
+    case "bits":
+    case "endnotexml":
+    case "gfm":
+    case "markdown_phpextra":
+    case "commonmark_x":
+    case "markdown_strict":
+      return convertPandoc(input, inputType);
+    case "pdf":
+      return convertIdentity(input);
     default:
-      // Unsupported media type
-      throw new MediaTypeError(`Unsupported media type: ${input.mimetype}`);
+      throw new MediaTypeError(`Unsupported type: ${inputType}`);
   }
 }
 
 /**
  * Converts the given HTML to a PDF using Chromium.
  *
- * This converter supports files with the following MIME types:
- *
- * - text/html
- * - application/xhtml+xml
- *
  * @see https://pptr.dev/
  */
-async function convertHtml(
+async function convertChrome(
     input: Express.Multer.File,
     resources: Express.Multer.File[],
 ): Promise<ConversionResult> {
@@ -938,21 +1293,9 @@ async function convertHtml(
 /**
  * Converts the given document to a PDF using LibreOffice.
  *
- * This converter supports files with the following MIME types:
- *
- * - application/msword
- * - application/vnd.openxmlformats-officedocument.wordprocessingml.document
- * - application/vnd.ms-excel
- * - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
- * - application/vnd.ms-powerpoint
- * - application/vnd.openxmlformats-officedocument.presentationml.presentation
- * - application/vnd.oasis.opendocument.presentation
- * - application/vnd.oasis.opendocument.spreadsheet
- * - application/vnd.oasis.opendocument.text
- *
  * @see https://www.libreoffice.org/
  */
-async function convertDocument(
+async function convertLibreOffice(
     input: Express.Multer.File,
 ): Promise<ConversionResult> {
   for (const unoserverInstance of unoserverInstances) {
@@ -968,13 +1311,28 @@ async function convertDocument(
 }
 
 /**
+ * Converts the given file to a PDF using Pandoc.
+ *
+ * @see https://pandoc.org/
+ */
+async function convertPandoc(
+    input: Express.Multer.File,
+    inputType: string,
+): Promise<ConversionResult> {
+  return {
+    output: await pandocInstance.convert(input.buffer, inputType),
+    mimeType: "application/pdf"
+  };
+}
+
+/**
  * "Converts" the given PDF to a PDF.
  *
  * This converter supports files with the following MIME types:
  *
  * - application/pdf
  */
-function convertPdf(input: Express.Multer.File): ConversionResult {
+function convertIdentity(input: Express.Multer.File): ConversionResult {
   return {
     output: input.buffer,
     mimeType: "application/pdf",
