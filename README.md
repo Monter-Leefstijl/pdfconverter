@@ -199,6 +199,8 @@ Below is a table of environment variables that can be used to configure the serv
     ```bash
     docker compose up -d
     ```
+6. Done! Navigate to http://localhost:1337/healthcheck to check if everything works. It may take some time for
+   everything to become healthy.
 
 ## Contributing
 

@@ -706,7 +706,9 @@ class Pandoc {
       "--out",
       "-",
       "--pdf-engine",
-      "xelatex"
+      "xelatex",
+      "--standalone",
+      "--sandbox=true",
     ];
 
     const process = spawn(settings.pandocExecutablePath, args, {
