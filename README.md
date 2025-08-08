@@ -2,9 +2,9 @@
 
 [![Docker pulls](https://img.shields.io/docker/pulls/monterleefstijl/pdfconverter?style=flat&logo=docker&logoColor=white)](https://hub.docker.com/r/monterleefstijl/pdfconverter)
 
-Monter PDF Converter is a simple, developer-friendly API for converting various document formats into high-quality PDF 
-files. It is designed to handle multiple *concurrent* jobs, and ensures high-availability with health checks and automatic
-restarts.
+Monter PDF Converter is a simple, developer-friendly API for converting a very large number of document formats into
+high-quality PDF files. It is designed to handle multiple *concurrent* jobs, and ensures high-availability with health
+checks and automatic restarts.
 
 It is used in production by [Monter Leefstijl](https://www.monterleefstijl.nl/).
 
@@ -19,6 +19,9 @@ formatting and layout of the original documents.
   because of its ability to produce clean, high-quality PDFs with proper formatting and layout.
 - **Pandoc**: For other documents, Pandoc is used.
 
+The application automatically selects the correct converter based on the inferred MIME-type, the extension and the
+given type.
+
 ## Key features
 
 - **High-quality PDFs**: Uses Chromium (for HTML), LibreOffice (for documents) and Pandoc (for other files) to produce high-quality PDFs.
@@ -27,6 +30,8 @@ formatting and layout of the original documents.
 - **Health checks**: Provides a health check endpoint to monitor the service status.
 - **High-availability**: Ensures high-availability by automatically restarting child services (i.e. Chromium and LibreOffice) in case of failure.
 - **Highly configurable**: Allows customization of various settings through environment variables.
+- **Developer-friendly API**: Provides a single endpoint for conversion, and automatically selects the correct converter.
+- **Uncomplicated**: The entire source code is a single TypeScript file of ~1500 LOC.
 
 ## Endpoints
 
@@ -49,36 +54,63 @@ curl --location 'http://localhost:8080' \
 The endpoint accept a `multipart/form-data` request with the following fields:
 
 - `input` (*required*): The document to convert.
-- `resources` (*optional*): Additional resources for conversion using Chromium.
-- `type` (*optional*): The type of the given document. Only applicable when Pandoc is used. If no type is given, it is inferred from the MIME-type or the filename if possible.
-
-The `input` field should contain a document with one of the following MIME-types:
-
-- `text/html` (Chromium): `.html` files;
-- `application/xhtml+xml` (Chromium): `.xhtml` files;
-- `application/msword` (LibreOffice): `.doc` and `.dot` files;
-- `application/vnd.openxmlformats-officedocument.wordprocessingml.document` (LibreOffice): `.docx` files;
-- `application/vnd.ms-excel` (LibreOffice): `.xls`, `.xlt` and `.xla` files;
-- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` (LibreOffice): `.xlsx` files;
-- `application/vnd.ms-powerpoint` (LibreOffice): `.ppt`, `.pot`, `.pps` and `.ppa` files;
-- `application/vnd.openxmlformats-officedocument.presentationml.presentation` (LibreOffice): `.pptx` files.
-- `application/vnd.oasis.opendocument.presentation` (LibreOffice): `.odp` files.
-- `application/vnd.oasis.opendocument.spreadsheet` (LibreOffice): `.ods` files.
-- `application/vnd.oasis.opendocument.text` (LibreOffice): `.odt` files.
-- `text/markdown` (Pandoc): `.md` files.
-- `text/x-rst` (Pandoc): `.rst` files.
-- `application/epub+zip` (Pandoc): `.epub` files.
-- `application/json` (Pandoc): `.json` files.
-- `application/vnd.jupyter` (Pandoc): `.ipynb` files.
-- `text/csv` (Pandoc): `.csv` files.
-- `text/tab-separated-values` (Pandoc): `.tsv` files.
-- `application/xml` (Pandoc): `.xml` files.
-- `application/pdf` (none): `.pdf` files.
-- `text/plain` (Pandoc): other files.
+- `resources` (*optional*): Additional resources for conversion.
+- `type` (*optional*): The type of the **given** document.
 
 The `resources` field can contain additional resources for conversion from `.html` and `.xhtml` that cannot be embedded in
 the file itself. For example, if the file contains an image tag referencing `dog.jpg`, it may be included as a resource
-to have it be displayed in the PDF.
+to have it be displayed in the PDF. The `type` field can be used to specify the type of the **input** document whenever
+this is ambiguous, such as for `.txt` files.
+
+##### Supported input types
+
+| File type                                                                                                          | Common extensions                                                                    | Converter         |
+|--------------------------------------------------------------------------------------------------------------------| ------------------------------------------------------------------------------------ | ----------------- |
+| `biblatex` ([BibLaTeX](https://ctan.org/pkg/biblatex))                                                             | `.biblatex`                                                                          | Pandoc            |
+| `bibtex` ([BibTeX](http://www.bibtex.org/))                                                                        | `.bib`, `.bibtex`                                                                    | Pandoc            |
+| `bits` ([BITS XML](https://jats.nlm.nih.gov/extensions/bits/))                                                     | `.xml`                                                                               | Pandoc            |
+| `commonmark_x` ([CommonMark](https://commonmark.org/) with extensions)                                             | `.txt`                                                                               | Pandoc            |
+| `commonmark` ([CommonMark](https://commonmark.org/))                                                               | `.commonmark`                                                                        | Pandoc            |
+| `creole` ([Creole 1.0](https://www.wikicreole.org/wiki/Creole1.0))                                                 | `.creole`                                                                            | Pandoc            |
+| `csljson` ([CSL JSON](https://citeproc-js.readthedocs.io/en/latest/csl-json/markup.html))                          | `.csljson`, `.json`                                                                  | Pandoc            |
+| `csv` ([CSV](https://en.wikipedia.org/wiki/Comma-separated_values))                                                | `.csv`                                                                               | Pandoc            |
+| `djot` ([Djot](https://djot.net/))                                                                                 | `.dj`                                                                                | Pandoc            |
+| `docbook` ([DocBook](https://docbook.org/))                                                                        | `.xml`                                                                               | Pandoc            |
+| `docx` ([Microsoft Word](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-docx))                    | `.docx`                                                                              | LibreOffice       |
+| `dokuwiki` ([DokuWiki markup](https://www.dokuwiki.org/wiki:syntax))                                               | `.dokuwiki`                                                                          | Pandoc            |
+| `endnotexml` ([EndNote XML](https://endnote.com/))                                                                 | `.xml`                                                                               | Pandoc            |
+| `epub` ([EPUB](https://www.w3.org/publishing/epub3/))                                                              | `.epub`                                                                              | Pandoc            |
+| `fb2` ([FictionBook2](https://en.wikipedia.org/wiki/FictionBook))                                                  | `.fb2`                                                                               | Pandoc            |
+| `haddock` ([Haddock markup](https://www.haskell.org/haddock/))                                                     | `.hs`                                                                                | Pandoc            |
+| `html` ([HTML](https://www.w3.org/html/))                                                                          | `.html`, `.htm`                                                                      | Chromium          |
+| `ipynb` ([Jupyter Notebook](https://jupyter.org/))                                                                 | `.ipynb`                                                                             | Pandoc            |
+| `jats` ([JATS XML](https://jats.nlm.nih.gov/))                                                                     | `.xml`                                                                               | Pandoc            |
+| `json` (JSON version of native AST)                                                                                | `.json`                                                                              | Pandoc            |
+| `latex` ([LaTeX](https://www.latex-project.org/))                                                                  | `.tex`                                                                               | Pandoc            |
+| `man` ([roff man](https://en.wikipedia.org/wiki/Man_page))                                                         | `.man`                                                                               | Pandoc            |
+| `markdown_mmd` ([MultiMarkdown](https://fletcherpenney.net/multimarkdown/))                                        | `.mmd`                                                                               | Pandoc            |
+| `markdown_strict` ([Original Markdown](https://daringfireball.net/projects/markdown/))                             | `.txt`                                                                               | Pandoc            |
+| `markdown` ([Pandoc’s Markdown](https://pandoc.org/MANUAL.html#pandocs-markdown))                                  | `.md`, `.markdown`, `.mkd`, `.mdown`, `.mkdn`, `.mdwn`, `.mdtxt`, `.mdtext`, `.text` | Pandoc            |
+| `mdoc` ([mdoc](https://man.openbsd.org/mdoc))                                                                      | `.mdoc`                                                                              | Pandoc            |
+| `mediawiki` ([MediaWiki markup](https://www.mediawiki.org/wiki/Help:Formatting))                                   | `.wiki`                                                                              | Pandoc            |
+| `muse` ([Emacs Muse](https://www.emacswiki.org/emacs/EmacsMuse))                                                   | `.muse`                                                                              | Pandoc            |
+| `odt` ([OpenDocument Text](https://en.wikipedia.org/wiki/OpenDocument))                                            | `.odt`                                                                               | LibreOffice       |
+| `opendocument` ([OpenDocument](https://www.oasis-open.org/2021/06/16/opendocument-v1-3-oasis-standard-published/)) | `.od*`                                                                               | LibreOffice       |
+| `opml` ([OPML](http://opml.org/))                                                                                  | `.opml`                                                                              | Pandoc            |
+| `org` ([Emacs Org mode](https://orgmode.org/))                                                                     | `.org`                                                                               | Pandoc            |
+| `pod` ([Perl POD](https://perldoc.perl.org/perlpod))                                                               | `.pod`                                                                               | Pandoc            |
+| `pptx` ([Microsoft PowerPoint](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-pptx))              | `.pptx`                                                                              | LibreOffice       |
+| `ris` ([RIS](https://en.wikipedia.org/wiki/RIS_%28file_format%29))                                                 | `.ris`                                                                               | Pandoc            |
+| `rst` ([reStructuredText](https://docutils.sourceforge.io/rst.html))                                               | `.rst`                                                                               | Pandoc            |
+| `rtf` ([Rich Text Format](https://www.loc.gov/preservation/digital/formats/fdd/fdd000270.shtml))                   | `.rtf`                                                                               | LibreOffice       |
+| `t2t` ([txt2tags](https://txt2tags.org/))                                                                          | `.t2t`                                                                               | Pandoc            |
+| `textile` ([Textile](https://textile-lang.com/doc/))                                                               | `.textile`                                                                           | Pandoc            |
+| `tikiwiki` ([TikiWiki markup](https://doc.tiki.org/Wiki-Syntax))                                                   | `.tiki`                                                                              | Pandoc            |
+| `tsv` ([TSV](https://en.wikipedia.org/wiki/Tab-separated_values))                                                  | `.tsv`                                                                               | Pandoc            |
+| `twiki` ([TWiki markup](https://twiki.org/cgi-bin/view/TWiki/TextFormattingRules))                                 | `.twiki`                                                                             | Pandoc            |
+| `typst` ([Typst](https://typst.app/))                                                                              | `.typ`                                                                               | Pandoc            |
+| `vimwiki` ([Vimwiki markup](https://vimwiki.github.io/))                                                           | `.vimwiki`                                                                           | Pandoc            |
+| `xlsx` ([Microsoft Excel](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-xlsx))                   | `.xlsx`                                                                              | LibreOffice       |
 
 #### Response
 
@@ -86,7 +118,7 @@ to have it be displayed in the PDF.
   `application/pdf`.
 - `400 Bad Request`: The request is invalid (e.g. missing required `input` field).
 - `413 Payload Too Large`: The document is too large to be processed.
-- `415 Unsupported Media Type`: The document type is not supported.
+- `415 Unsupported Media Type`: The document type is not supported, or is not correctly specified.
 - `502 Bad Gateway`: The conversion failed in Chromium, LibreOffice or Pandoc.
 - `503 Service Unavailable`: The request is denied because the job queue is full.
 - `504 Gateway Timeout`: The conversion took too long to complete.
@@ -161,41 +193,17 @@ Below is a table of environment variables that can be used to configure the serv
 
 1.  Follow [this guide](https://docs.docker.com/engine/install/) to install Docker on your machine.
 2.  Follow [this guide](https://docs.docker.com/compose/install/) to install Docker Compose on your machine.
-3.  Create a `docker-compose.yaml` file with the following content:
-
-    ```yaml
-    name: pdfconverter
-    services:
-      pdfconverter:
-        image: monterleefstijl/pdfconverter:latest
-        healthcheck:
-          test: ["CMD", "curl", "--fail", "http://localhost:8080/healthcheck"]
-          interval: 60s
-          timeout: 10s
-          retries: 3
-          start_period: 10s
-        ports:
-          - "8080:8080"
-        # Required for rootless Docker
-        cap_add:
-          - SYS_ADMIN
-        tmpfs:
-          - /tmp:size=512M
-        restart: always
-    ```
-
+3.  Copy the `docker-compose.sample.yaml` in this repository and rename it to `docker-compose.yaml`.
+4.  Configure the port mapping as necessary in the `docker-compose.yaml` file.
 5.  Start the service by running the following command:
-
     ```bash
     docker compose up -d
     ```
 
-6.  The service is now running on port `8080` (to change the port, configure the port mapping in the
-    `docker-compose.yaml` file).
-
 ## Contributing
 
-Contributions are welcome! Please submit a pull request or open an issue to discuss any changes.
+Contributions are welcome! Please [submit a pull request](https://github.com/Monter-Leefstijl/pdfconverter/pulls) or
+[open an issue](https://github.com/Monter-Leefstijl/pdfconverter/issues) to discuss any changes.
 
 ## License
 
@@ -203,12 +211,12 @@ This project is licensed under the MIT License. See the [LICENSE](https://github
 
 ## Contact
 
-For any questions or support, please open an issue on GitHub.
+For any questions or support, please [open an issue on GitHub](https://github.com/Monter-Leefstijl/pdfconverter/issues).
 
 ## Alternatives
 
 For comparison, consider exploring these alternatives:
 
-- [Gotenberg](https://github.com/gotenberg/gotenberg): More comphrensive API, but without native support for concurrent jobs.
+- [Gotenberg](https://github.com/gotenberg/gotenberg): More comphrensive API, but with less supported file types and no native support for concurrent jobs.
 - [wkhtmltopdf](https://github.com/wkhtmltopdf/wkhtmltopdf): Command-line tool to convert HTML to PDF using WebKit.
 - [puppeteer-html-to-pdf-converter](https://github.com/fritsvt/puppeteer-html-to-pdf-converter): Simple API for converting from HTML to PDF.

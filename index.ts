@@ -8,6 +8,7 @@ import {
 import chardet from "chardet";
 import crypto from "crypto";
 import express from "express";
+import iconv from "iconv-lite";
 import morgan from "morgan";
 import multer, { MulterError } from "multer";
 import puppeteer, {
@@ -624,33 +625,6 @@ class ChromiumBrowser {
  * Manages communication to a Pandoc executable.
  */
 class Pandoc {
-  static extensionToPandocType: Record<string, string> = {
-    '.md': 'markdown',
-    '.markdown': 'markdown',
-    '.mkd': 'markdown',
-    '.txt': 'markdown',
-    '.rst': 'rst',
-    '.tex': 'latex',
-    '.epub': 'epub',
-    '.json': 'json',
-    '.ipynb': 'ipynb',
-    '.csv': 'csv',
-    '.tsv': 'tsv',
-    '.xml': 'xml',
-  };
-
-  static mimeToPandocType: Record<string, string> = {
-    'text/markdown': 'markdown',
-    'text/x-rst': 'rst',
-    'application/epub+zip': 'epub',
-    'application/json': 'json',
-    'application/vnd.jupyter': 'ipynb',
-    'text/csv': 'csv',
-    'text/tab-separated-values': 'tsv',
-    'application/xml': 'xml',
-    'text/xml': 'xml',
-  };
-
   async start(): Promise<void> {
     console.log(`[${new Date().toUTCString()}] Checking Pandoc executable.`);
 
@@ -670,8 +644,8 @@ class Pandoc {
     });
   }
 
-  async convert(input: Buffer, from: string): Promise<Buffer> {
-    const pandocProcess = await this.spawnPandocProcess(from);
+  async convert(input: Buffer, fromType: string): Promise<Buffer> {
+    const pandocProcess = await this.spawnPandocProcess(fromType);
 
     return await new Promise((resolve, reject) => {
       let outData = Buffer.alloc(128, "");
@@ -710,9 +684,9 @@ class Pandoc {
       // Determine the encoding of the input buffer
       const encoding = chardet.detect(input)?.toLowerCase() || "utf-8";
 
-      if (encoding !== "utf-8") {
+      if (encoding.toLowerCase() !== "utf-8") {
         // Transform the input to UTF-8 if it is not already (see https://pandoc.org/MANUAL.html#character-encoding).
-        // TODO
+        input = Buffer.from(iconv.decode(input, encoding), "utf-8");
       }
 
       // Write the input to the input pipe
@@ -723,73 +697,10 @@ class Pandoc {
     });
   }
 
-  /**
-   * Tries to determine the given file's input type for use with Pandoc.
-   *
-   * @see https://pandoc.org/MANUAL.html#general-options
-   */
-  determineType(input: Express.Multer.File): string | undefined {
-    const mimeToPandocType: Record<string, string> = {
-      'text/markdown': 'markdown',
-      'text/x-rst': 'rst',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-      'text/html': 'html',
-      'application/vnd.oasis.opendocument.text': 'odt',
-      'application/epub+zip': 'epub',
-      'application/msword': 'doc',
-      'application/json': 'json',
-      'application/vnd.jupyter': 'ipynb',
-      'application/vnd.ms-powerpoint': 'pptx',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
-      'text/csv': 'csv',
-      'text/tab-separated-values': 'tsv',
-      'application/xml': 'xml',
-      'text/xml': 'xml',
-    };
-
-    if (input.mimetype && mimeToPandocType[input.mimetype]) {
-      return mimeToPandocType[input.mimetype];
-    }
-
-    const extensionToPandocType: Record<string, string> = {
-      '.md': 'markdown',
-      '.markdown': 'markdown',
-      '.mkd': 'markdown',
-      '.txt': 'markdown',
-      '.rst': 'rst',
-      '.tex': 'latex',
-      '.docx': 'docx',
-      '.html': 'html',
-      '.htm': 'html',
-      '.odt': 'odt',
-      '.epub': 'epub',
-      '.doc': 'doc',
-      '.org': 'org',
-      '.json': 'json',
-      '.ipynb': 'ipynb',
-      '.pptx': 'pptx',
-      '.csv': 'csv',
-      '.tsv': 'tsv',
-      '.xml': 'xml',
-    };
-
-    const ext = path.extname(input.originalname).toLowerCase();
-
-    if (ext && extensionToPandocType[ext]) {
-      return extensionToPandocType[ext];
-    }
-
-    console.log(
-      `[${new Date().toUTCString()}] Failed to determine file type.`,
-    );
-
-    return undefined;
-  }
-
-  private async spawnPandocProcess(from: string): Promise<ChildProcessWithoutNullStreams> {
+  private async spawnPandocProcess(fromType: string): Promise<ChildProcessWithoutNullStreams> {
     const args = [
       "--from",
-      from,
+      fromType,
       "--to",
       "pdf",
       "--out",
@@ -821,6 +732,158 @@ let pandocInstance: Pandoc;
 let unoserverInstances: Unoserver[] = [];
 let webserverInstance: express.Express;
 let jobQueue: QueueObject<ConversionJob>;
+
+const extensionToType: Record<string, string> = {
+  // Bibliography formats
+  '.bib': 'bibtex',
+  '.bibtex': 'bibtex',
+  '.biblatex': 'biblatex',
+  '.ris': 'ris',
+  '.json': 'json',
+  '.csljson': 'csljson',
+
+  // HTML
+  '.html': 'html',
+  '.htm': 'html',
+  '.xhtml': 'html',
+
+  // PDF
+  '.pdf': 'pdf',
+
+  // Markdown variants
+  '.md': 'markdown',
+  '.markdown': 'markdown',
+  '.mkd': 'markdown',
+  '.mdown': 'markdown',
+  '.mkdn': 'markdown',
+  '.mdwn': 'markdown',
+  '.mdtxt': 'markdown',
+  '.mdtext': 'markdown',
+  '.mmd': 'markdown_mmd',
+  '.text': 'markdown',
+  '.commonmark': 'commonmark',
+  '.dj': 'djot',
+
+  // Other lightweight markup
+  '.creole': 'creole',
+  '.wiki': 'mediawiki',
+  '.dokuwiki': 'dokuwiki',
+  '.tiki': 'tikiwiki',
+  '.twiki': 'twiki',
+  '.vimwiki': 'vimwiki',
+  '.org': 'org',
+  '.textile': 'textile',
+  '.t2t': 't2t',
+
+  // ReST, LaTeX, etc.
+  '.rst': 'rst',
+  '.tex': 'latex',
+
+  // Word processing formats
+  '.rtf': 'rtf',
+  '.doc': 'docx',
+  '.dot': 'docx',
+  '.docx': 'docx',
+  '.xsl': 'xlsx',
+  '.xlt': 'xlsx',
+  '.xla': 'xlsx',
+  '.xlsx': 'xlsx',
+  '.ppt': 'pptx',
+  '.pot': 'pptx',
+  '.pps': 'pptx',
+  '.ppa': 'pptx',
+  '.pptx': 'pptx',
+  '.odp': 'opendocument',
+  '.ods': 'opendocument',
+  '.odt': 'odt',
+
+  // E-books
+  '.epub': 'epub',
+  '.fb2': 'fb2',
+
+  // Data tables
+  '.csv': 'csv',
+  '.tsv': 'tsv',
+
+  // Jupyter notebooks
+  '.ipynb': 'ipynb',
+
+  // OPML
+  '.opml': 'opml',
+
+  // Manual pages
+  '.man': 'man',
+  '.mdoc': 'mdoc',
+
+  // Emacs Muse
+  '.muse': 'muse',
+
+  // Haddock
+  '.hs': 'haddock',
+
+  // Perl POD
+  '.pod': 'pod',
+
+  // Typst
+  '.typ': 'typst',
+};
+
+const mimeToType: Record<string, string> = {
+  // HTML
+  'text/html': 'html',
+  'application/xhtml+xml': 'html',
+
+  // PDF
+  'application/pdf': 'pdf',
+
+  // Markdown
+  'text/markdown': 'markdown',
+  'text/x-markdown': 'markdown',
+
+  // ReST
+  'text/x-rst': 'rst',
+
+  // Word processing
+  'application/rtf': 'rtf',
+  'application/msword': 'docx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xlsx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.ms-powerpoint': 'pptx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'application/vnd.oasis.opendocument.presentation': 'opendocument',
+  'application/vnd.oasis.opendocument.spreadsheet': 'opendocument',
+  'application/vnd.oasis.opendocument.text': 'odt',
+
+  // E-books
+  'application/epub+zip': 'epub',
+  'application/x-fictionbook+xml': 'fb2',
+
+  // Bibliography
+  'application/x-bibtex': 'bibtex',
+  'application/x-biblatex': 'biblatex',
+  'application/ris': 'ris',
+  'application/vnd.citationstyles.csl+json': 'csljson',
+
+  // Data tables
+  'text/csv': 'csv',
+  'text/tab-separated-values': 'tsv',
+
+  // Jupyter
+  'application/vnd.jupyter': 'ipynb',
+
+  // OPML
+  'text/x-opml': 'opml',
+
+  // POD
+  'application/x-perl': 'pod',
+
+  // Typst
+  'application/x-typst': 'typst',
+
+  // Generic JSON AST
+  'application/json': 'json',
+};
 
 const health: Health = {
   browser: "unhealthy",
@@ -1113,6 +1176,27 @@ async function initPandoc() {
 }
 
 /**
+ * Tries to determine the given file's type.
+ */
+function determineType(input: Express.Multer.File): string | undefined {
+  if (input.mimetype && mimeToType[input.mimetype]) {
+    return mimeToType[input.mimetype];
+  }
+
+  const ext = path.extname(input.originalname).toLowerCase();
+
+  if (ext && extensionToType[ext]) {
+    return extensionToType[ext];
+  }
+
+  console.log(
+      `[${new Date().toUTCString()}] Failed to determine file type.`,
+  );
+
+  return undefined;
+}
+
+/**
  * Converts the given input file and resources to a PDF using an appropriate converter.
  */
 async function convert(
@@ -1120,35 +1204,77 @@ async function convert(
     resources: Express.Multer.File[],
     type?: string,
 ): Promise<ConversionResult> {
-  switch (input.mimetype) {
-    case "text/html":
-    case "application/xhtml+xml":
+  const determinedType = determineType(input);
+  const inputType = type || determinedType;
+
+  if (!inputType) {
+    throw new MediaTypeError(`Unknown type: ${input.mimetype}`);
+  }
+
+  if (determinedType && determinedType !== inputType) {
+    throw new MediaTypeError(`Invalid type: the determined type ${determinedType} does not match the specified type ${type}.`);
+  }
+
+  switch (inputType) {
+    case "html":
       return await convertChrome(input, resources);
-    case "application/msword": // .doc, .dot
-    case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": // .docx
-    case "application/vnd.ms-excel": // .xls, .xlt, .xla
-    case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": // .xlsx
-    case "application/vnd.ms-powerpoint": // .ppt, .pot, .pps, .ppa
-    case "application/vnd.openxmlformats-officedocument.presentationml.presentation": // .pptx
-    case "application/vnd.oasis.opendocument.presentation": // .odp
-    case "application/vnd.oasis.opendocument.spreadsheet": // .ods
-    case "application/vnd.oasis.opendocument.text": // .odt
+    case "rtf":
+    case "docx":
+    case "xlsx":
+    case "pptx":
+    case "opendocument":
+    case "odt":
       return await convertLibreOffice(input);
-    case "application/pdf": // .pdf
+    case "bibtex":
+    case "biblatex":
+    case "ris":
+    case "json":
+    case "clsjson":
+    case "markdown":
+    case "markdown_mmd":
+    case "commonmark":
+    case "djot":
+    case "creole":
+    case "mediawiki":
+    case "dokuwiki":
+    case "tikiwiki":
+    case "twiki":
+    case "vimwiki":
+    case "org":
+    case "textile":
+    case "t2t":
+    case "rst":
+    case "latex":
+    case "epub":
+    case "fb2":
+    case "csv":
+    case "tsv":
+    case "ipynb":
+    case "opml":
+    case "man":
+    case "mdoc":
+    case "muse":
+    case "haddock":
+    case "pod":
+    case "typst":
+    case "docbook":
+    case "jats":
+    case "bits":
+    case "endnotexml":
+    case "gfm":
+    case "markdown_phpextra":
+    case "commonmark_x":
+    case "markdown_strict":
+      return convertPandoc(input, inputType);
+    case "pdf":
       return convertIdentity(input);
     default:
-      // Fallback to using Pandoc
-      return await convertPandoc(input, type);
+      throw new MediaTypeError(`Unsupported type: ${inputType}`);
   }
 }
 
 /**
  * Converts the given HTML to a PDF using Chromium.
- *
- * This converter supports files with the following MIME types:
- *
- * - text/html
- * - application/xhtml+xml
  *
  * @see https://pptr.dev/
  */
@@ -1164,18 +1290,6 @@ async function convertChrome(
 
 /**
  * Converts the given document to a PDF using LibreOffice.
- *
- * This converter supports files with the following MIME types:
- *
- * - application/msword
- * - application/vnd.openxmlformats-officedocument.wordprocessingml.document
- * - application/vnd.ms-excel
- * - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
- * - application/vnd.ms-powerpoint
- * - application/vnd.openxmlformats-officedocument.presentationml.presentation
- * - application/vnd.oasis.opendocument.presentation
- * - application/vnd.oasis.opendocument.spreadsheet
- * - application/vnd.oasis.opendocument.text
  *
  * @see https://www.libreoffice.org/
  */
@@ -1195,22 +1309,14 @@ async function convertLibreOffice(
 }
 
 /**
- * Converts the given file to a PDF using Pandoc, or throws a MediaTypeError if the input
- * type could not be determined or is not supported.
+ * Converts the given file to a PDF using Pandoc.
  *
  * @see https://pandoc.org/
  */
 async function convertPandoc(
     input: Express.Multer.File,
-    type?: string,
+    inputType: string,
 ): Promise<ConversionResult> {
-  const inputType = type || pandocInstance.determineType(input);
-
-  if (!inputType) {
-    // Unsupported media type
-    throw new MediaTypeError(`Unsupported media type: ${input.mimetype}`);
-  }
-
   return {
     output: await pandocInstance.convert(input.buffer, inputType),
     mimeType: "application/pdf"
