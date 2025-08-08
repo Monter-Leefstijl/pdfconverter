@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sample HTML Test File</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 2px 4px;
+            font-family: Consolas, monospace;
+            border-radius: 3px;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: Consolas, monospace;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 10px 0;
+        }
+        table, th, td {
+            border: 1px solid #444;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        blockquote {
+            border-left: 4px solid #ccc;
+            padding-left: 10px;
+            color: #555;
+            margin: 10px 0;
+            background-color: #f9f9f9;
+        }
+        .nested-blockquote {
+            margin-left: 20px;
+            border-color: #aaa;
+        }
+        mark {
+            background-color: yellow;
+        }
+        hr {
+            border: none;
+            border-top: 2px solid #ccc;
+            margin: 20px 0;
+        }
+        ul.task-list {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        ul.task-list li {
+            margin: 5px 0;
+        }
+        ul.task-list input[type="checkbox"] {
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Sample HTML Test File</h1>
+
+<h2>Headings</h2>
+<h1>Heading level 1</h1>
+<h2>Heading level 2</h2>
+<h3>Heading level 3</h3>
+<h4>Heading level 4</h4>
+<h5>Heading level 5</h5>
+<h6>Heading level 6</h6>
+
+<hr />
+
+<h2>Text Formatting</h2>
+<p><strong>Bold text</strong></p>
+<p><em>Italic text</em></p>
+<p><strong><em>Bold and italic text</em></strong></p>
+<p><del>Strikethrough</del></p>
+<p><u>Underline text</u></p>
+<p>Superscript: X<sup>2</sup>, Subscript: H<sub>2</sub>O</p>
+
+<hr />
+
+<h2>Lists</h2>
+
+<h3>Unordered list</h3>
+<ul>
+    <li>Item 1</li>
+    <li>Item 2
+        <ul>
+            <li>Nested item 2a</li>
+            <li>Nested item 2b</li>
+        </ul>
+    </li>
+    <li>Item 3</li>
+</ul>
+
+<h3>Ordered list</h3>
+<ol>
+    <li>First item</li>
+    <li>Second item
+        <ol>
+            <li>Subitem 2a</li>
+            <li>Subitem 2b</li>
+        </ol>
+    </li>
+    <li>Third item</li>
+</ol>
+
+<hr />
+
+<h2>Links</h2>
+<p><a href="https://google.com" target="_blank" rel="noopener" title="Google Homepage">Google with tooltip</a></p>
+
+<hr />
+
+<h2>Blockquotes</h2>
+<blockquote>
+    This is a blockquote.<br />
+    It can span multiple lines.
+    <blockquote class="nested-blockquote">
+        Nested blockquote.
+    </blockquote>
+</blockquote>
+
+<hr />
+
+<h2>Code</h2>
+
+<h3>Inline code</h3>
+<p>Here is some <code>inline code</code>.</p>
+
+<h3>Code block</h3>
+<pre><code>def greet(name):
+    print(f"Hello, {name}!")
+
+greet("World")
+</code></pre>
+
+<hr />
+
+<h2>Tables</h2>
+<table>
+    <thead>
+    <tr>
+        <th>Syntax</th>
+        <th>Description</th>
+        <th>Test</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>Header</td>
+        <td>Title</td>
+        <td>✓</td>
+    </tr>
+    <tr>
+        <td>Paragraph</td>
+        <td>Text</td>
+        <td>✓</td>
+    </tr>
+    <tr>
+        <td>Code</td>
+        <td><code>print("hello world")</code></td>
+        <td>✓</td>
+    </tr>
+    </tbody>
+</table>
+
+<hr />
+
+<h2>Horizontal Rules</h2>
+<hr />
+<hr />
+<hr />
+
+<h2>Task List</h2>
+<ul class="task-list">
+    <li><input type="checkbox" checked disabled>Completed task</li>
+    <li><input type="checkbox" disabled>Incomplete task</li>
+    <li><input type="checkbox" disabled>Another incomplete task</li>
+</ul>
+
+<hr />
+
+<h2>Highlight (using &lt;mark&gt;)</h2>
+<p>This is a paragraph with <mark>highlighted text</mark> using &lt;mark&gt;.</p>
+
+</body>
+</html>
