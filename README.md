@@ -2,9 +2,10 @@
 
 [![Docker pulls](https://img.shields.io/docker/pulls/monterleefstijl/pdfconverter?style=flat&logo=docker&logoColor=white)](https://hub.docker.com/r/monterleefstijl/pdfconverter)
 
-Monter PDF Converter is a simple, developer-friendly API for converting a very large number of document formats into
-high-quality PDF files. It is designed to handle multiple *concurrent* jobs, and ensures high-availability with health
-checks and automatic restarts.
+Monter PDF Converter is a fast, developer-friendly API for turning an extensive range of document formats into
+high-quality PDFs. It's built to process multiple jobs concurrently, maintain high availability through health checks
+and automatic restarts, and simplify integration with a single conversion endpoint that automatically chooses the
+correct converter for each file.
 
 It is used in production by [Monter Leefstijl](https://www.monterleefstijl.nl/).
 
@@ -17,7 +18,7 @@ formatting and layout of the original documents.
   JavaScript, and supports modern web standards, ensuring that styles, fonts and other elements are preserved.
 - **LibreOffice**: For conversion from Word, Excel, PowerPoint and other document formats, LibreOffice is well-suited
   because of its ability to produce clean, high-quality PDFs with proper formatting and layout.
-- **Pandoc**: For other documents, Pandoc is used.
+- **Pandoc**: For conversion from other document formats, Pandoc is well-suited because of its versatility.
 
 The application automatically selects the correct converter based on the inferred MIME-type, the extension and the
 given type.
@@ -111,6 +112,10 @@ this is ambiguous, such as for `.txt` files.
 | `typst` ([Typst](https://typst.app/))                                                                              | `.typ`                                                                               | Pandoc            |
 | `vimwiki` ([Vimwiki markup](https://vimwiki.github.io/))                                                           | `.vimwiki`                                                                           | Pandoc            |
 | `xlsx` ([Microsoft Excel](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-xlsx))                   | `.xlsx`                                                                              | LibreOffice       |
+
+##### Supported encodings
+
+The endpoint automatically detects the encoding, and handles the conversion if necessary.
 
 #### Response
 
