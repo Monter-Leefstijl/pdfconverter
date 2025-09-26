@@ -62,12 +62,14 @@ const settings = {
 };
 
 type Health = {
-  browser: "healthy" | "unhealthy";
+  browser: "healthy" | "unhealthy" | "disabled" | "unknown";
   webserver: "healthy" | "unhealthy";
-  pandoc: "healthy" | "unhealthy";
+  pandoc: "healthy" | "unhealthy" | "disabled" | "unknown";
   jobQueue: "healthy" | "unhealthy";
-  unoservers: Record<number, "healthy" | "unhealthy">;
+  unoservers: Record<number, "healthy" | "unhealthy"> | "disabled" | "unknown";
 };
+
+type Converter = "pandoc" | "libreoffice" | "chromium";
 
 type ConversionJob = () => Promise<void>;
 type ConversionResult = {
@@ -159,6 +161,36 @@ class Unoserver {
   private timesRestarted = 0;
   private available = false;
 
+  static check() {
+    console.log(`[${new Date().toUTCString()}] Checking LibreOffice executables.`);
+
+    try {
+      fs.accessSync(settings.libreofficeExecutablePath, fs.constants.X_OK);
+      console.log(`[${new Date().toUTCString()}] LibreOffice executable found.`);
+    } catch (e) {
+      console.log(`[${new Date().toUTCString()}] LibreOffice executable not found, disabling conversion with LibreOffice.`)
+      return false;
+    }
+
+    try {
+      fs.accessSync(settings.unoserverExecutablePath, fs.constants.X_OK);
+      console.log(`[${new Date().toUTCString()}] Unoserver executable found.`);
+    } catch (e) {
+      console.log(`[${new Date().toUTCString()}] Unoserver executable not found, disabling conversion with LibreOffice.`)
+      return false;
+    }
+
+    try {
+      fs.accessSync(settings.unoconvertExecutablePath, fs.constants.X_OK);
+      console.log(`[${new Date().toUTCString()}] Unoconvert executable found.`);
+    } catch (e) {
+      console.log(`[${new Date().toUTCString()}] Unoconvert executable not found, disabling conversion with LibreOffice.`)
+      return false;
+    }
+
+    return true;
+  }
+
   constructor(private readonly port: number) {
     const randomID = crypto.randomBytes(20).toString("hex");
 
@@ -177,6 +209,13 @@ class Unoserver {
 
     console.log(
         `[${new Date().toUTCString()}] Starting LibreOffice instance on port ${this.port}.`,
+    );
+
+    health.unoservers = unoserverPorts.reduce(
+        (acc: Record<number, "healthy" | "unhealthy">, port: number) => {
+          acc[port] = "unhealthy";
+          return acc;
+        }, {}
     );
 
     this.timesRestarted += 1;
@@ -199,6 +238,7 @@ class Unoserver {
         // Clear the reset timeout
         clearTimeout(resetRestartedCounterTimeout);
         // Mark the unoserver as unhealthy while it is restarting
+        // @ts-ignore
         health.unoservers[this.port] = "unhealthy";
         // Mark the unoserver as unavailable while it is restarting
         this.available = false;
@@ -421,6 +461,23 @@ class ChromiumBrowser {
   private restartInterval?: NodeJS.Timeout;
   private timesRestarted = 0;
 
+  static check() {
+    console.log(`[${new Date().toUTCString()}] Checking Chromium executable.`);
+
+    try {
+      fs.accessSync(settings.chromeExecutablePath, fs.constants.X_OK);
+      console.log(`[${new Date().toUTCString()}] Chromium executable found.`);
+      health.browser = "unhealthy";
+
+      return true;
+    } catch (e) {
+      console.log(`[${new Date().toUTCString()}] Chromium executable not found, disabling conversion with Chromium.`);
+      health.browser = "disabled";
+
+      return false;
+    }
+  }
+
   async start() {
     if (this.timesRestarted > Number(settings.maxRestarts)) {
       throw new MaxRestartsExceededError(`Failed to start headless browser after ${this.timesRestarted - 1} attempts.`);
@@ -625,23 +682,25 @@ class ChromiumBrowser {
  * Manages communication to a Pandoc executable.
  */
 class Pandoc {
-  async start(): Promise<void> {
+  static executableAvailable() {
     console.log(`[${new Date().toUTCString()}] Checking Pandoc executable.`);
 
-    return new Promise((resolve, reject) => {
-      fs.access(settings.pandocExecutablePath, fs.constants.X_OK, (err) => {
-        if (!err) {
-          console.log(`[${new Date().toUTCString()}] Pandoc executable found.`);
+    try {
+      fs.accessSync(settings.pandocExecutablePath, fs.constants.X_OK);
+      console.log(`[${new Date().toUTCString()}] Pandoc executable found.`);
+      health.pandoc = "unhealthy";
 
-          health.pandoc = "healthy";
-          resolve();
-        } else {
-          console.log(`[${new Date().toUTCString()}] Pandoc executable not found.`);
+      return true;
+    } catch (e) {
+      console.log(`[${new Date().toUTCString()}] Pandoc executable not found, disabling conversion with Pandoc.`);
+      health.pandoc = "disabled";
+      return false;
+    }
+  }
 
-          reject();
-        }
-      });
-    });
+  start(): void {
+    // Pandoc is ready immediately
+    health.pandoc = "healthy";
   }
 
   async convert(input: Buffer, fromType: string): Promise<Buffer> {
@@ -888,15 +947,9 @@ const mimeToType: Record<string, string> = {
 };
 
 const health: Health = {
-  browser: "unhealthy",
-  pandoc: "unhealthy",
-  unoservers: unoserverPorts.reduce(
-      (acc: Record<number, "healthy" | "unhealthy">, port: number) => {
-        acc[port] = "unhealthy";
-        return acc;
-      },
-      {},
-  ),
+  browser: "unknown",
+  pandoc: "unknown",
+  unoservers: "unknown",
   webserver: "unhealthy",
   jobQueue: "unhealthy",
 };
@@ -922,13 +975,13 @@ async function main() {
 
   webserverInstance.get("/healthcheck", (req, res) => {
     const healthy =
-        health.browser === "healthy" // The browser must be healthy
+        (!health.browser || health.browser === "healthy") // The browser must be healthy
         && health.webserver === "healthy" // The webserver must be healthy
-        && health.pandoc === "healthy" // Pandoc must be healthy
+        && (!health.pandoc || health.pandoc === "healthy") // Pandoc must be healthy
         && health.jobQueue === "healthy" // The jobqueue must be healthy
-        && Object.values(health.unoservers).some( // At least one unoserver must be healthy
+        && (!health.unoservers || Object.values(health.unoservers).some( // At least one unoserver must be healthy
             (status) => status === "healthy"
-        );
+        ));
 
     const statusCode = healthy ? 200 : 503;
 
