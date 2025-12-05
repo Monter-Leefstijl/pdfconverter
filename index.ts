@@ -579,6 +579,7 @@ class ChromiumBrowser {
         return await page.pdf({
           format: "A4",
           timeout: Number(settings.pdfRenderTimeout),
+          printBackground: true,
         });
       } finally {
         page.close().catch(() => {
