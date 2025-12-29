@@ -1,9 +1,7 @@
 name: pdfconverter
 services:
   pdfconverter:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: monterleefstijl/pdfconverter:0.4.0
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/healthcheck"]
       interval: 60s
