@@ -800,6 +800,11 @@ const extensionToType: Record<string, string> = {
   '.ods': 'opendocument',
   '.odt': 'odt',
 
+  // Apple iWork formats
+  '.pages': 'pages',
+  '.numbers': 'numbers',
+  '.key': 'keynote',
+
   // E-books
   '.epub': 'epub',
   '.fb2': 'fb2',
@@ -857,6 +862,11 @@ const mimeToType: Record<string, string> = {
   'application/vnd.oasis.opendocument.presentation': 'opendocument',
   'application/vnd.oasis.opendocument.spreadsheet': 'opendocument',
   'application/vnd.oasis.opendocument.text': 'odt',
+
+  // Apple iWork formats
+  'application/vnd.apple.pages': 'pages',
+  'application/vnd.apple.numbers': 'numbers',
+  'application/vnd.apple.keynote': 'keynote',
 
   // E-books
   'application/epub+zip': 'epub',
@@ -1227,6 +1237,9 @@ async function convert(
     case "pptx":
     case "opendocument":
     case "odt":
+    case "pages":
+    case "numbers":
+    case "keynote":
       return await convertLibreOffice(input);
     case "bibtex":
     case "biblatex":
