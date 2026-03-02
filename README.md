@@ -207,6 +207,41 @@ Below is a table of environment variables that can be used to configure the serv
 6. Done! Navigate to http://localhost:1337/healthcheck to check if everything works. It may take some time for
    everything to become healthy.
 
+### Running from source using Docker (for development)
+
+If you want to build and run the service directly from this repository (for example when developing new features or
+testing a pull request), you can use the provided `docker-compose.dev.yml`:
+
+1. Ensure Docker and Docker Compose are installed (see steps 1 and 2 above).
+2. From the repository root, build and start the development container:
+    ```bash
+    docker compose -f docker-compose.dev.yml up -d --build
+    ```
+3. Once the container is healthy, run basic smoke tests against the service:
+   - Convert HTML to PDF:
+     ```bash
+     curl --location 'http://localhost:1337' \
+       --form 'input=@"index.html"' \
+       --output output.pdf
+     ```
+   - Convert a `.docx` file to PDF:
+     ```bash
+     curl --location 'http://localhost:1337' \
+       --form 'input=@"document.docx"' \
+       --output document.pdf
+     ```
+   - Convert an Apple Numbers file to XLSX:
+     ```bash
+     curl --location 'http://localhost:1337' \
+       --form 'input=@"spreadsheet.numbers"' \
+       --form 'output="xlsx"' \
+       --output spreadsheet.xlsx
+     ```
+4. You can monitor the health endpoint while developing:
+    ```bash
+    curl --location 'http://localhost:1337/healthcheck'
+    ```
+
 ## Contributing
 
 Contributions are welcome! Please [submit a pull request](https://github.com/Monter-Leefstijl/pdfconverter/pulls) or
