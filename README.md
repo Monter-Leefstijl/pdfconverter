@@ -45,9 +45,7 @@ The following endpoints are available:
 
 ```shell
 curl --location 'http://localhost:8080' \
-  --form 'input=@"index.html"' \
-  --form 'resources=@"dog.jpg"' \
-  --form 'resources=@"cat.jpg"'
+  --form 'input=@"examples/html.html"'
 ```
 
 #### Request
@@ -221,21 +219,14 @@ testing a pull request), you can use the provided `docker-compose.dev.yml`:
    - Convert HTML to PDF:
      ```bash
      curl --location 'http://localhost:1337' \
-       --form 'input=@"index.html"' \
+       --form 'input=@"examples/html.html"' \
        --output output.pdf
      ```
    - Convert a `.docx` file to PDF:
      ```bash
      curl --location 'http://localhost:1337' \
-       --form 'input=@"document.docx"' \
+       --form 'input=@"examples/word.docx"' \
        --output document.pdf
-     ```
-   - Convert an Apple Numbers file to XLSX:
-     ```bash
-     curl --location 'http://localhost:1337' \
-       --form 'input=@"spreadsheet.numbers"' \
-       --form 'output="xlsx"' \
-       --output spreadsheet.xlsx
      ```
 4. You can monitor the health endpoint while developing:
     ```bash
