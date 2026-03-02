@@ -248,12 +248,12 @@ class Unoserver {
     }
   }
 
-  async convert(input: Buffer): Promise<Buffer> {
+  async convert(input: Buffer, outputFormat: string = "pdf"): Promise<Buffer> {
     // Mark the unoserver as unavailable while the conversion is in progress
     this.available = false;
 
     try {
-      const unoconvertProcess = await this.spawnUnoconvertProcess();
+      const unoconvertProcess = await this.spawnUnoconvertProcess(outputFormat);
 
       return await new Promise((resolve, reject) => {
         let outData = Buffer.alloc(128, "");
@@ -387,12 +387,12 @@ class Unoserver {
     });
   }
 
-  private async spawnUnoconvertProcess(): Promise<ChildProcessWithoutNullStreams> {
+  private async spawnUnoconvertProcess(outputFormat: string = "pdf"): Promise<ChildProcessWithoutNullStreams> {
     const args = [
       "--port",
       this.port.toString(),
       "--convert-to",
-      "pdf",
+      outputFormat,
       "-", // Input from stdin
       "-", // Output to stdout
     ];
@@ -800,6 +800,11 @@ const extensionToType: Record<string, string> = {
   '.ods': 'opendocument',
   '.odt': 'odt',
 
+  // Apple iWork formats
+  '.pages': 'pages',
+  '.numbers': 'numbers',
+  '.key': 'keynote',
+
   // E-books
   '.epub': 'epub',
   '.fb2': 'fb2',
@@ -857,6 +862,11 @@ const mimeToType: Record<string, string> = {
   'application/vnd.oasis.opendocument.presentation': 'opendocument',
   'application/vnd.oasis.opendocument.spreadsheet': 'opendocument',
   'application/vnd.oasis.opendocument.text': 'odt',
+
+  // Apple iWork formats
+  'application/vnd.apple.pages': 'pages',
+  'application/vnd.apple.numbers': 'numbers',
+  'application/vnd.apple.keynote': 'keynote',
 
   // E-books
   'application/epub+zip': 'epub',
@@ -1023,13 +1033,16 @@ async function handleConversionJob(req: express.Request, res: express.Response) 
   const resources = (req.files?.resources ?? []) as Express.Multer.File[];
   // @ts-ignore
   const type = req.body?.type;
+  // @ts-ignore
+  const output = req.body?.output;
 
   if (
     !Array.isArray(input) ||
     input.length !== 1 ||
     !Array.isArray(resources) ||
     resources.length > Number(settings.maxResourceCount) ||
-    (type !== undefined && typeof type !== 'string' && !(type instanceof String))
+    (type !== undefined && typeof type !== 'string' && !(type instanceof String)) ||
+    (output !== undefined && typeof output !== 'string' && !(output instanceof String))
   ) {
     // Bad request
     res.status(400).send();
@@ -1037,15 +1050,15 @@ async function handleConversionJob(req: express.Request, res: express.Response) 
   }
 
   try {
-    const conversionResult = await convert(input[0], resources, type);
+    const conversionResult = await convert(input[0], resources, type, output);
 
-    const output = conversionResult.output;
+    const conversionOutput = conversionResult.output;
     const mimeType = conversionResult.mimeType;
 
-    res.setHeader("Content-Type", mimeType).status(200).send(output);
+    res.setHeader("Content-Type", mimeType).status(200).send(conversionOutput);
   } catch (error) {
     console.log(
-        `[${new Date().toUTCString()}] Failed to generate PDF (${error}).`,
+        `[${new Date().toUTCString()}] Failed to convert document (${error}).`,
     );
 
     if (
@@ -1200,12 +1213,13 @@ function determineType(input: Express.Multer.File): string | undefined {
 }
 
 /**
- * Converts the given input file and resources to a PDF using an appropriate converter.
+ * Converts the given input file and resources using an appropriate converter.
  */
 async function convert(
     input: Express.Multer.File,
     resources: Express.Multer.File[],
     type?: string,
+    outputFormat?: string,
 ): Promise<ConversionResult> {
   const determinedType = determineType(input);
   const inputType = type || determinedType;
@@ -1218,6 +1232,14 @@ async function convert(
     throw new MediaTypeError(`Invalid type: the determined type ${determinedType} does not match the specified type ${type}.`);
   }
 
+  // List of input types that support custom output formats (LibreOffice-based conversions)
+  const libreOfficeTypes = ["rtf", "docx", "xlsx", "pptx", "opendocument", "odt", "pages", "numbers", "keynote"];
+
+  // Validate that outputFormat is only used with LibreOffice conversions
+  if (outputFormat && outputFormat !== "pdf" && !libreOfficeTypes.includes(inputType)) {
+    throw new MediaTypeError(`Custom output format "${outputFormat}" is only supported for LibreOffice conversions (${libreOfficeTypes.join(", ")}). Input type "${inputType}" does not support custom output formats.`);
+  }
+
   switch (inputType) {
     case "html":
       return await convertChrome(input, resources);
@@ -1227,7 +1249,10 @@ async function convert(
     case "pptx":
     case "opendocument":
     case "odt":
-      return await convertLibreOffice(input);
+    case "pages":
+    case "numbers":
+    case "keynote":
+      return await convertLibreOffice(input, outputFormat);
     case "bibtex":
     case "biblatex":
     case "ris":
@@ -1292,18 +1317,37 @@ async function convertChrome(
 }
 
 /**
- * Converts the given document to a PDF using LibreOffice.
+ * Map of output formats to MIME types.
+ */
+const outputFormatToMimeType: Record<string, string> = {
+  pdf: "application/pdf",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
+
+/**
+ * Supported output formats for LibreOffice conversions.
+ */
+const supportedOutputFormats = Object.keys(outputFormatToMimeType);
+
+/**
+ * Converts the given document using LibreOffice.
  *
  * @see https://www.libreoffice.org/
  */
 async function convertLibreOffice(
     input: Express.Multer.File,
+    outputFormat: string = "pdf",
 ): Promise<ConversionResult> {
+  // Validate the output format to prevent arbitrary values being passed to unoserver
+  if (!supportedOutputFormats.includes(outputFormat)) {
+    throw new MediaTypeError(`Unsupported output format: ${outputFormat}. Supported formats: ${supportedOutputFormats.join(", ")}`);
+  }
+
   for (const unoserverInstance of unoserverInstances) {
     if (unoserverInstance.isAvailable()) {
       return {
-        output: await unoserverInstance.convert(input.buffer),
-        mimeType: "application/pdf",
+        output: await unoserverInstance.convert(input.buffer, outputFormat),
+        mimeType: outputFormatToMimeType[outputFormat],
       };
     }
   }

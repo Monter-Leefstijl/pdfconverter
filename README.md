@@ -55,11 +55,13 @@ The endpoint accept a `multipart/form-data` request with the following fields:
 - `input` (*required*): The document to convert.
 - `resources` (*optional*): Additional resources for conversion.
 - `type` (*optional*): The type of the **given** document.
+- `output` (*optional*): The desired output format (e.g., `xlsx`). Defaults to `pdf`. Only supported for LibreOffice conversions.
 
 The `resources` field can contain additional resources for conversion from `.html` and `.xhtml` that cannot be embedded in
 the file itself. For example, if the file contains an image tag referencing `dog.jpg`, it may be included as a resource
 to have it be displayed in the PDF. The `type` field can be used to specify the type of the **input** document whenever
-this is ambiguous, such as for `.txt` files.
+this is ambiguous, such as for `.txt` files. The `output` field can be used to specify a different output format for 
+LibreOffice-based conversions, such as converting `.numbers` files to `.xlsx` format.
 
 ##### Supported input types
 
@@ -85,6 +87,7 @@ this is ambiguous, such as for `.txt` files.
 | `ipynb` ([Jupyter Notebook](https://jupyter.org/))                                                                 | `.ipynb`                                                                             | Pandoc            |
 | `jats` ([JATS XML](https://jats.nlm.nih.gov/))                                                                     | `.xml`                                                                               | Pandoc            |
 | `json` (JSON version of native AST)                                                                                | `.json`                                                                              | Pandoc            |
+| `keynote` ([Apple Keynote](https://www.apple.com/keynote/))                                                        | `.key`                                                                               | LibreOffice       |
 | `latex` ([LaTeX](https://www.latex-project.org/))                                                                  | `.tex`                                                                               | Pandoc            |
 | `man` ([roff man](https://en.wikipedia.org/wiki/Man_page))                                                         | `.man`                                                                               | Pandoc            |
 | `markdown_mmd` ([MultiMarkdown](https://fletcherpenney.net/multimarkdown/))                                        | `.mmd`                                                                               | Pandoc            |
@@ -93,10 +96,12 @@ this is ambiguous, such as for `.txt` files.
 | `mdoc` ([mdoc](https://man.openbsd.org/mdoc))                                                                      | `.mdoc`                                                                              | Pandoc            |
 | `mediawiki` ([MediaWiki markup](https://www.mediawiki.org/wiki/Help:Formatting))                                   | `.wiki`                                                                              | Pandoc            |
 | `muse` ([Emacs Muse](https://www.emacswiki.org/emacs/EmacsMuse))                                                   | `.muse`                                                                              | Pandoc            |
+| `numbers` ([Apple Numbers](https://www.apple.com/numbers/))                                                        | `.numbers`                                                                           | LibreOffice       |
 | `odt` ([OpenDocument Text](https://en.wikipedia.org/wiki/OpenDocument))                                            | `.odt`                                                                               | LibreOffice       |
 | `opendocument` ([OpenDocument](https://www.oasis-open.org/2021/06/16/opendocument-v1-3-oasis-standard-published/)) | `.od*`                                                                               | LibreOffice       |
 | `opml` ([OPML](http://opml.org/))                                                                                  | `.opml`                                                                              | Pandoc            |
 | `org` ([Emacs Org mode](https://orgmode.org/))                                                                     | `.org`                                                                               | Pandoc            |
+| `pages` ([Apple Pages](https://www.apple.com/pages/))                                                              | `.pages`                                                                             | LibreOffice       |
 | `pod` ([Perl POD](https://perldoc.perl.org/perlpod))                                                               | `.pod`                                                                               | Pandoc            |
 | `pptx` ([Microsoft PowerPoint](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-pptx))              | `.pptx`                                                                              | LibreOffice       |
 | `ris` ([RIS](https://en.wikipedia.org/wiki/RIS_%28file_format%29))                                                 | `.ris`                                                                               | Pandoc            |
@@ -111,14 +116,32 @@ this is ambiguous, such as for `.txt` files.
 | `vimwiki` ([Vimwiki markup](https://vimwiki.github.io/))                                                           | `.vimwiki`                                                                           | Pandoc            |
 | `xlsx` ([Microsoft Excel](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-xlsx))                   | `.xlsx`                                                                              | LibreOffice       |
 
+##### Supported output formats
+
+By default, all conversions produce PDF output. For LibreOffice-based conversions, you can specify an alternative 
+output format using the `output` parameter:
+
+| Output format | Description                        | MIME type                                                            |
+|---------------|------------------------------------|----------------------------------------------------------------------|
+| `pdf`         | PDF document (default)             | `application/pdf`                                                    |
+| `xlsx`        | Microsoft Excel spreadsheet        | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`  |
+
+**Example: Converting .numbers to .xlsx**
+
+```shell
+curl --location 'http://localhost:8080' \
+  --form 'input=@"spreadsheet.numbers"' \
+  --form 'output="xlsx"'
+```
+
 ##### Supported encodings
 
 The endpoint automatically detects the encoding, and handles the conversion if necessary.
 
 #### Response
 
-- `200 OK`: The document is successfully converted to a PDF. The response will contain the PDF file with content-type
-  `application/pdf`.
+- `200 OK`: The document is successfully converted. The response will contain the converted file with the appropriate 
+  content-type (e.g., `application/pdf` for PDF output, `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` for xlsx output).
 - `400 Bad Request`: The request is invalid (e.g. missing required `input` field).
 - `413 Payload Too Large`: The document is too large to be processed.
 - `415 Unsupported Media Type`: The document type is not supported, or is not correctly specified.
