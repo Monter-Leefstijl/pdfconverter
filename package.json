@@ -5,7 +5,9 @@
   "license": "MIT",
   "scripts": {
     "start": "node index.js",
-    "build": "tsc"
+    "build": "tsc",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "repository": {
     "type": "git",
@@ -28,6 +30,7 @@
     "@types/lodash": "^4.17.10",
     "@types/morgan": "^1.9.9",
     "@types/multer": "^1.4.11",
-    "typescript": "^5.5.2"
+    "typescript": "^5.5.2",
+    "vitest": "^2.0.0"
   }
 }

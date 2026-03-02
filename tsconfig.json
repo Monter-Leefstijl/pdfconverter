@@ -14,5 +14,5 @@
     "lib": ["ES2022", "DOM"]
   },
   "exclude": ["node_modules"],
-  "files": ["index.ts"]
+  "include": ["index.ts", "tests/**/*.ts"]
 }
