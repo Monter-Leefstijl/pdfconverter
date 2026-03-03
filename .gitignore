@@ -141,3 +141,8 @@ index.js
 
 # MacOS
 .DS_Store
+
+# Compiled test files
+tests/**/*.js
+tests/**/*.d.ts
+tests/**/*.js.map
