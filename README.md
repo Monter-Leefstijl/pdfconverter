@@ -256,6 +256,33 @@ testing a pull request), you can use the provided `docker-compose.dev.yml`:
     curl --location 'http://localhost:1337/healthcheck'
     ```
 
+### Running the automated integration tests
+
+With the development container running as described above, you can run the automated integration tests from the host:
+
+```bash
+npm install           # first time only
+npm test -- --run
+```
+
+The suite will:
+
+- Verify `/healthcheck`.
+- Exercise HTML, Markdown, and Word conversions using the files in the `examples/` folder.
+- Check error-handling behavior and basic output-format handling.
+
+By default, the tests target `http://localhost:1337`. You can override this by setting `PDFCONVERTER_BASE_URL`:
+
+```bash
+PDFCONVERTER_BASE_URL=http://localhost:8080 npm test -- --run
+```
+
+To include a `.numbers` → `xlsx` test, provide a sample Numbers file either as `examples/spreadsheet.numbers` or via an environment variable:
+
+```bash
+TEST_NUMBERS_PATH=/path/to/your-file.numbers PDFCONVERTER_BASE_URL=http://localhost:1337 npm test -- --run
+```
+
 ## Contributing
 
 Contributions are welcome! Please [submit a pull request](https://github.com/Monter-Leefstijl/pdfconverter/pulls) or
