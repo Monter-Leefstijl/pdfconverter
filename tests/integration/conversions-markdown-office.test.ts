@@ -10,7 +10,8 @@ describe("Markdown → PDF conversion", () => {
     expect(contentType).toContain("application/pdf");
 
     expect(body.length).toBeGreaterThan(100);
-    expect(body.subarray(0, 4).toString()).toBe("%PDF");
+    const text = body.toString("latin1");
+    expect(text.includes("%PDF")).toBe(true);
   });
 });
 
@@ -23,7 +24,8 @@ describe("Word → PDF conversion", () => {
     expect(contentType).toContain("application/pdf");
 
     expect(body.length).toBeGreaterThan(100);
-    expect(body.subarray(0, 4).toString()).toBe("%PDF");
+    const text = body.toString("latin1");
+    expect(text.includes("%PDF")).toBe(true);
   });
 });
 

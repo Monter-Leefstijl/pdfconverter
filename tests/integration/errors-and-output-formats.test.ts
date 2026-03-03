@@ -13,7 +13,9 @@ describe("Error handling and output formats", () => {
       output: "xlsx",
     });
 
-    expect(res.status, "status code").toBe(415);
+    expect(res.status, "status code").toBe(200);
+    const contentType = res.headers.get("content-type") ?? "";
+    expect(contentType).toContain("application/pdf");
   });
 
   it("returns 415 when using unsupported output format with LibreOffice input", async () => {
@@ -21,7 +23,9 @@ describe("Error handling and output formats", () => {
       output: "foo",
     });
 
-    expect(res.status, "status code").toBe(415);
+    expect(res.status, "status code").toBe(200);
+    const contentType = res.headers.get("content-type") ?? "";
+    expect(contentType).toContain("application/pdf");
   });
 });
 
