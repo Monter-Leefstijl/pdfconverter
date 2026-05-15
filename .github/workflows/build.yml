@@ -4,6 +4,10 @@ on:
   push:
     tags: ['*']
 
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
 jobs:
   build-image:
     name: "Build and push to Docker"
